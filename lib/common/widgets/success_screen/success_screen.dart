@@ -1,0 +1,36 @@
+import 'package:flutter/material.dart';
+
+import '../../../foundation/constants/sizes.dart';
+import '../../../foundation/helpers/helper_functions.dart';
+import '../../styles/spacing.dart';
+
+class SuccessScreen extends StatelessWidget {
+  const SuccessScreen({super.key, required this.image, required this.title, required this.subTitle, required this.onPressed});
+
+  final String image, title, subTitle;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: Spacing.paddingWithAppBarHeight*2,
+          child: Column(
+            children: [
+              Image(image: AssetImage(image), width: THelperFunctions.screenWidth()*0.6,),
+              SizedBox(height: TSizes.spaceBtwSections,),
+
+              Text(title, style: Theme.of(context).textTheme.headlineMedium,textAlign: TextAlign.center,),
+              SizedBox(height: TSizes.spaceBtwItems,),
+              Text(subTitle, style: Theme.of(context).textTheme.labelMedium,textAlign: TextAlign.center,),
+              SizedBox(height: TSizes.spaceBtwSections,),
+
+              SizedBox(width: double.infinity,  child: ElevatedButton(onPressed: onPressed, child: Text("Continue")),),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
