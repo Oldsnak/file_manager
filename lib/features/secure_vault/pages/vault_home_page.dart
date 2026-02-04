@@ -1,260 +1,330 @@
 // lib/features/secure_vault/pages/vault_home_page.dart
-
-import 'dart:io';
-
+import 'package:file_manager/foundation/constants/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../../core/controllers/vault_controller.dart';
-import '../../../core/models/vault_item.dart';
-import '../../../foundation/constants/colors.dart';
-import '../../../foundation/constants/sizes.dart';
-import '../../../foundation/helpers/helper_functions.dart';
+import '../../../HomePage.dart';
+import 'vault_lock_page.dart';
+import 'vault_entry_page.dart';
 
-class VaultHomePage extends StatefulWidget {
+class VaultHomePage extends StatelessWidget {
   const VaultHomePage({super.key});
 
-  @override
-  State<VaultHomePage> createState() => _VaultHomePageState();
-}
-
-class _VaultHomePageState extends State<VaultHomePage> {
-  final VaultController c = Get.find<VaultController>();
-
-  @override
-  void initState() {
-    super.initState();
-    c.refreshVault();
-  }
+  static const String routeName = "/vault-home";
 
   @override
   Widget build(BuildContext context) {
-    final dark = THelperFunctions.isDarkMode(context);
+    final theme = Theme.of(context);
 
-    final bgGradient = dark
-        ? const RadialGradient(
-      colors: [
-        TColors.darkGradientBackgroundStart,
-        TColors.darkGradientBackgroundEnd,
-      ],
-      radius: 1.0,
-    )
-        : const RadialGradient(
-      colors: [
-        TColors.lightGradientBackgroundStart,
-        TColors.lightGradientBackgroundEnd,
-      ],
-      radius: 1.0,
-    );
-
-    return Container(
-      decoration: BoxDecoration(gradient: bgGradient),
-      child: Scaffold(
+    return Scaffold(
+      appBar: AppBar(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: Text(
-            "Secure Vault",
-            style: TextStyle(
-              color: dark ? TColors.textWhite : TColors.textPrimary,
-            ),
+        title: const Text("Secure Vault"),
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: Theme.of(context).appBarTheme.iconTheme?.color,
           ),
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          iconTheme: IconThemeData(
-            color: dark ? TColors.textWhite : TColors.textPrimary,
-          ),
-          actions: [
-            IconButton(
-              tooltip: "Refresh",
-              onPressed: c.refreshVault,
-              icon: Icon(
-                Icons.refresh,
-                color: dark ? TColors.textWhite : TColors.textPrimary,
-              ),
-            ),
-          ],
+          onPressed: () {
+            Get.offAll(() => const HomePage());
+          },
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: TColors.primary,
-          icon: const Icon(Icons.lock_outline, color: TColors.textWhite),
-          label: const Text(
-            "Lock Files",
-            style: TextStyle(color: TColors.textWhite),
+      ),
+
+
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _HeaderCard(theme: theme),
+              const SizedBox(height: 14),
+
+              // Main actions
+              Expanded(
+                child: GridView.count(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.95,
+                  children: [
+                    _ActionCard(
+                      title: "Enter Vault",
+                      subtitle: "Unlock with PIN / biometrics",
+                      icon: Icons.lock_open_rounded,
+                      onTap: () => Get.to(
+                            () => const VaultLockPage(),
+                        transition: Transition.cupertino,
+                      ),
+                    ),
+                    _ActionCard(
+                      title: "Lock Files",
+                      subtitle: "Hide your private files",
+                      icon: Icons.lock_rounded,
+                      onTap: () => Get.to(
+                            () => const VaultLockPage(),
+                        transition: Transition.cupertino,
+                      ),
+                    ),
+                    _ActionCard(
+                      title: "Help",
+                      subtitle: "How Secure Vault works",
+                      icon: Icons.help_outline_rounded,
+                      onTap: () => _openHelpSheet(context),
+                    ),
+                    _ActionCard(
+                      title: "Settings",
+                      subtitle: "Change PIN & options",
+                      icon: Icons.settings_rounded,
+                      onTap: () => Get.snackbar(
+                        "Secure Vault",
+                        "Settings page will be added next.",
+                        snackPosition: SnackPosition.BOTTOM,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          onPressed: c.pickAndLockFiles,
-        ),
-        body: Padding(
-          padding: const EdgeInsets.all(TSizes.defaultSpace),
-          child: Obx(() {
-            if (c.isLoading.value) {
-              return const Center(
-                child: CircularProgressIndicator(color: TColors.primary),
-              );
-            }
-
-            if (c.items.isEmpty) {
-              return _emptyState(context, dark);
-            }
-
-            return GridView.builder(
-              itemCount: c.items.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: TSizes.gridViewSpacing,
-                mainAxisSpacing: TSizes.gridViewSpacing,
-              ),
-              itemBuilder: (_, i) => _vaultItemCard(
-                context,
-                item: c.items[i],
-                dark: dark,
-              ),
-            );
-          }),
         ),
       ),
     );
   }
 
-  Widget _emptyState(BuildContext context, bool dark) {
-    final titleColor = dark ? TColors.textWhite : TColors.textPrimary;
-    final subColor = dark ? TColors.darkGrey : TColors.textSecondary;
+  void _openHelpSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  "Secure Vault Help",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                SizedBox(height: 10),
+                _HelpRow(
+                  icon: Icons.lock_rounded,
+                  title: "Lock Files",
+                  desc:
+                  "Files are moved into app private storage, so they won’t appear in Gallery/Files apps.",
+                ),
+                SizedBox(height: 10),
+                _HelpRow(
+                  icon: Icons.lock_open_rounded,
+                  title: "Unlock Files",
+                  desc:
+                  "Restore files back to their original location (or choose a folder).",
+                ),
+                SizedBox(height: 10),
+                _HelpRow(
+                  icon: Icons.security_rounded,
+                  title: "Security",
+                  desc:
+                  "Access requires PIN (and optional biometrics). You can change PIN anytime.",
+                ),
+                SizedBox(height: 14),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
 
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+class _HeaderCard extends StatelessWidget {
+  const _HeaderCard({required this.theme});
+
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: TColors.primary.withOpacity(0.10),
+
+        border: Border.all(color: TColors.primary.withOpacity(0.20)),
+      ),
+      child: Row(
         children: [
-          Icon(Icons.lock_outline, size: 64, color: TColors.primary),
-          const SizedBox(height: TSizes.spaceBtwItems),
-          Text(
-            "Your vault is empty",
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: titleColor,
-              fontWeight: FontWeight.w700,
+          Container(
+            height: 54,
+            width: 54,
+            decoration: BoxDecoration(
+              color: TColors.primary.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              Icons.lock_rounded,
+              color: TColors.primary,
+              size: 30,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            "Lock photos, videos or files to keep them private.",
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: subColor,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Secure Vault",
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Protect your private files with PIN / biometrics.",
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.85),
+                  ),
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: TSizes.spaceBtwSections),
-          ElevatedButton.icon(
-            onPressed: c.pickAndLockFiles,
-            icon: const Icon(Icons.add),
-            label: const Text("Add to Vault"),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _vaultItemCard(
-      BuildContext context, {
-        required VaultItem item,
-        required bool dark,
-      }) {
-    final cardBg = dark ? TColors.darkContainer : TColors.lightContainer;
-    final border = dark ? TColors.darkerGrey : TColors.grey;
-    final titleColor = dark ? TColors.textWhite : TColors.textPrimary;
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
 
-    IconData icon;
-    switch (item.type) {
-      case VaultItemType.image:
-        icon = Icons.image;
-        break;
-      case VaultItemType.video:
-        icon = Icons.videocam;
-        break;
-      case VaultItemType.audio:
-        icon = Icons.audiotrack;
-        break;
-      case VaultItemType.document:
-        icon = Icons.description;
-        break;
-      default:
-        icon = Icons.insert_drive_file;
-    }
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
 
-    return GestureDetector(
-      onTap: () => _showItemActions(context, item, dark),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(TSizes.sm),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(TSizes.cardRdiusMd),
-          border: Border.all(color: border),
+          color: TColors.primary.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.65)),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: dark
-                      ? TColors.darkOptionalContainer
-                      : TColors.lightOptionalContainer,
-                  borderRadius:
-                  BorderRadius.circular(TSizes.borderRadiusMd),
-                ),
-                child: Center(
-                  child: Icon(icon, size: 36, color: TColors.primary),
-                ),
+            Container(
+              height: 44,
+              width: 44,
+              decoration: BoxDecoration(
+                color: TColors.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: TColors.primary),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: TSizes.xs),
+            const SizedBox(height: 6),
             Text(
-              item.name,
+              subtitle,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: titleColor,
-                fontWeight: FontWeight.w600,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.textTheme.bodySmall?.color?.withOpacity(0.85),
               ),
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                Text(
+                  "Open",
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: TColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: TColors.primary,
+                  size: 18,
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  void _showItemActions(BuildContext context, VaultItem item, bool dark) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor:
-      dark ? TColors.darkContainer : TColors.lightContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      builder: (_) {
-        return SafeArea(
+class _HelpRow extends StatelessWidget {
+  const _HelpRow({
+    required this.icon,
+    required this.title,
+    required this.desc,
+  });
+
+  final IconData icon;
+  final String title;
+  final String desc;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 38,
+          width: 38,
+          decoration: BoxDecoration(
+            color: TColors.primary.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: TColors.primary, size: 20),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ListTile(
-                leading: const Icon(Icons.lock_open),
-                title: const Text("Unlock & Restore"),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await c.unlockItem(item);
-                },
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline,
-                    color: TColors.error),
-                title: const Text("Delete from Vault"),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await c.deleteItem(item);
-                },
+              const SizedBox(height: 4),
+              Text(
+                desc,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.85),
+                ),
               ),
-              const SizedBox(height: TSizes.sm),
             ],
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }

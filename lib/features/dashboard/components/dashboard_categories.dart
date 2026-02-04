@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get_rx/src/rx_typedefs/rx_typedefs.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+import '../../../common/widgets/pages/coming_soon_page.dart';
 import '../../../foundation/constants/colors.dart';
 import '../../../foundation/constants/sizes.dart';
 import '../../file_browser/pages/browser_page.dart';
 import 'package:get/get.dart';
 import 'package:photo_manager/photo_manager.dart';
+import '../../file_browser/pages/file_scan_page.dart';
 
 class DashboardMedicineList extends StatelessWidget {
   const DashboardMedicineList({super.key});
@@ -19,9 +21,9 @@ class DashboardMedicineList extends StatelessWidget {
         child: Wrap(
           children: [
             //yaha database sy sari categories fetch kry
-            CategoryNameDisplayer(name: "Downloads", icon: Icon(Iconsax.document_download, color: TColors.darkPrimary, ), ontap: () {},),
-            CategoryNameDisplayer(name: "Documents", icon: Icon(Iconsax.document, color: TColors.darkPrimary), ontap: () {},),
-            CategoryNameDisplayer(name: "Apps", icon: Icon(Iconsax.android, color: TColors.darkPrimary), ontap: () {},),
+            CategoryNameDisplayer(name: "Downloads", icon: Icon(Iconsax.document_download, color: TColors.darkPrimary,), ontap: () => Get.to(() => const FileScanPage(title: "Downloads", category: ScanCategory.downloads,)),),
+            CategoryNameDisplayer(name: "Documents", icon: Icon(Iconsax.document, color: TColors.darkPrimary), ontap: () => Get.to(() => const FileScanPage(title: "Documents", category: ScanCategory.documents,)),),
+            CategoryNameDisplayer(name: "Apps", icon: Icon(Iconsax.android, color: TColors.darkPrimary), ontap: () => Get.to(() => const ComingSoonPage(title: "Apps", subtitle: "Apps listing needs additional Android package APIs.",)),),
             CategoryNameDisplayer(
               name: "Images",
               icon: Icon(Iconsax.image, color: TColors.darkPrimary),

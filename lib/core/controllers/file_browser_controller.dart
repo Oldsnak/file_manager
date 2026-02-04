@@ -4,10 +4,12 @@ import 'package:get/get.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../features/file_browser/pages/file_scan_page.dart';
+import '../../features/secure_vault/pages/vault_entry_page.dart';
 import '../models/browser_item.dart';
 import '../services/media_service.dart';
 import '../services/file_scan_service.dart';
 import '../services/permission_service.dart';
+import '../services/secure_vault_service.dart';
 
 enum ViewMode { list, grid }
 
@@ -27,6 +29,9 @@ class FileBrowserController extends GetxController {
   final PermissionService _permissionService = Get.find<PermissionService>();
   final MediaService _mediaService = Get.find<MediaService>();
   final FileScanService _scanService = Get.find<FileScanService>();
+
+  // ✅ vault service (for move-to-secure)
+  final SecureVaultService _vault = Get.find<SecureVaultService>();
 
   // -------------------- UI state --------------------
   final isLoading = false.obs;
@@ -145,6 +150,7 @@ class FileBrowserController extends GetxController {
       final ok = await _permissionService.requestMediaPermission();
       if (!ok || _mediaType == null) return [];
 
+      // For media we can request newest/oldest by query itself
       final newestFirst = sortOption.value == SortOption.dateNewToOld;
 
       if (_album != null) {
@@ -167,7 +173,7 @@ class FileBrowserController extends GetxController {
     // ---------------- FILE SCAN (PAGED) ----------------
     if (_scanCategory == null) return [];
 
-    // ✅ NEW: use paged APIs (service builds cache once, then slices)
+    // ✅ use paged APIs (service builds cache once, then slices)
     if (_scanFolderPath == null || _scanFolderPath!.trim().isEmpty) {
       return _scanService.scanCategoryPaged(
         _scanCategory!,
@@ -323,6 +329,83 @@ class FileBrowserController extends GetxController {
 
     items.removeWhere((x) => selectedIds.contains(x.id));
     clearSelection();
+  }
+
+  // ==================================================
+  // ✅ MOVE TO SECURE VAULT
+  // (single + multi, keeps existing features working)
+  // ==================================================
+
+  /// Single item to vault (used by actions sheet)
+  Future<bool> moveToSecureVault(BrowserItem item) async {
+    if (item.path.isEmpty) return false;
+
+    // Ensure vault is setup/unlocked
+    final ok = await Get.to<bool>(() => const VaultEntryPage());
+    if (ok != true) return false;
+
+    try {
+      await _vault.lockFile(item.path);
+
+      // Remove original
+      if (item.isFromGallery) {
+        // deleting removes from MediaStore (privacy)
+        final deleted = await _mediaService.deleteMediaByIds([item.id]);
+        if (!deleted) return false;
+      } else {
+        final deleted = await _scanService.deleteFile(item.path);
+        if (!deleted) return false;
+      }
+
+      items.removeWhere((x) => x.id == item.id);
+      selectedIds.remove(item.id);
+      if (selectedIds.isEmpty) selectionMode.value = false;
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Multi selected items to vault (if you add "Move selected to secure" later)
+  Future<int> moveSelectedToSecureVault() async {
+    if (selectedIds.isEmpty) return 0;
+
+    // Ensure vault is setup/unlocked
+    final ok = await Get.to<bool>(() => const VaultEntryPage());
+    if (ok != true) return 0;
+
+    int moved = 0;
+
+    // Work on a snapshot so removing from items won't break loop
+    final selectedItems = items.where((x) => selectedIds.contains(x.id)).toList();
+
+    for (final it in selectedItems) {
+      if (it.path.isEmpty) continue;
+
+      try {
+        await _vault.lockFile(it.path);
+
+        // Remove original
+        bool removed = false;
+        if (it.isFromGallery) {
+          removed = await _mediaService.deleteMediaByIds([it.id]);
+        } else {
+          removed = await _scanService.deleteFile(it.path);
+        }
+
+        if (removed) {
+          moved++;
+          items.removeWhere((x) => x.id == it.id);
+          selectedIds.remove(it.id);
+        }
+      } catch (_) {
+        // ignore individual failures
+      }
+    }
+
+    if (selectedIds.isEmpty) selectionMode.value = false;
+    return moved;
   }
 
   // ==================================================

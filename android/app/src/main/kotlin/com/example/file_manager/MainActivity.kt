@@ -5,11 +5,11 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.ComponentCallbacks2
 import android.os.Build
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
 
     private val CHANNEL = "ram_cleaner"
 
@@ -62,13 +62,11 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun trimMemoryBestEffort() {
-        // ✅ correct API: Application implements ComponentCallbacks2
         try {
             application.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
             application.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN)
         } catch (_: Exception) { }
 
-        // ✅ GC best effort
         try {
             Runtime.getRuntime().gc()
             System.gc()

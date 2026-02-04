@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'core/dependency_injection.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  DependencyInjection.init();
+  await DependencyInjection.init();
   runApp(const MyApp());
 }

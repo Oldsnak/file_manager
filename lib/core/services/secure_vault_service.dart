@@ -9,15 +9,18 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/vault_item.dart';
 
-
 class SecureVaultService {
-  // Metadata storage (GetStorage)
+  // =========================================================
+  // METADATA (GetStorage)
+  // =========================================================
   static const String _boxName = "secure_vault_box";
   static const String _itemsKey = "vault_items_v1";
 
   late final GetStorage _box;
 
-  // internal vault directory name
+  // =========================================================
+  // VAULT DIRECTORY
+  // =========================================================
   static const String _vaultDirName = "SecureVault";
 
   /// Init must be called once in DependencyInjection before controllers.
@@ -40,6 +43,31 @@ class SecureVaultService {
     if (!dir.existsSync()) {
       await dir.create(recursive: true);
     }
+  }
+
+  // =========================================================
+  // ✅ OPTIONAL: CLEAR ALL (used by Auth reset / logout flows)
+  // (Does not affect existing features unless you call it)
+  // =========================================================
+
+  /// Clear metadata + delete all files inside vault directory.
+  /// Use carefully (example: when user resets vault PIN).
+  Future<void> clearAllVaultData() async {
+    // Clear metadata
+    try {
+      await _box.remove(_itemsKey);
+    } catch (_) {}
+
+    // Delete all vault files
+    try {
+      final dir = await _vaultDir();
+      if (dir.existsSync()) {
+        await dir.delete(recursive: true);
+      }
+    } catch (_) {}
+
+    // Recreate dir
+    await _ensureVaultDir();
   }
 
   // =========================================================
@@ -78,6 +106,7 @@ class SecureVaultService {
     if (items.isEmpty) return [];
 
     final cleaned = <VaultItem>[];
+
     for (final it in items) {
       if (it.storedPath.isEmpty) continue;
       final f = File(it.storedPath);
@@ -109,13 +138,15 @@ class SecureVaultService {
     }
 
     final dir = await _vaultDir();
-    final ext = _extension(originalPath);
-    final baseName = VaultItem.basename(originalPath);
+
+    // ✅ FIX: baseName already contains extension in most cases (e.g. "photo.jpg")
+    // We should NOT append ext twice.
+    final baseName = VaultItem.basename(originalPath); // might be "file.pdf"
+    final safeFullName = _safeFileName(baseName); // keep ext inside name
 
     // Unique name to avoid collisions
     final stamp = DateTime.now().millisecondsSinceEpoch;
-    final safeName = _safeFileName(baseName);
-    final destPath = "${dir.path}/$stamp-$safeName$ext";
+    final destPath = "${dir.path}/$stamp-$safeFullName";
 
     // Move file (rename is fastest, but may fail across storage volumes)
     File moved;
@@ -139,6 +170,10 @@ class SecureVaultService {
     );
 
     final current = loadItems();
+
+    // ✅ avoid duplicates if same file gets locked again somehow
+    current.removeWhere((x) => x.storedPath == item.storedPath || x.originalPath == originalPath);
+
     current.insert(0, item);
     await saveItems(current);
 
@@ -219,6 +254,8 @@ class SecureVaultService {
   // HELPERS
   // =========================================================
 
+  /// Extract extension including dot (".pdf") from a path.
+  /// (Still used for unlock naming / overwrite logic, keep it.)
   String _extension(String path) {
     final p = path.replaceAll("\\", "/");
     final name = p.split("/").last;

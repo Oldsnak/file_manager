@@ -7,6 +7,7 @@ import '../../../foundation/constants/colors.dart';
 import '../../../foundation/constants/sizes.dart';
 import '../../../foundation/helpers/helper_functions.dart';
 
+import '../../../core/services/vault_auth_service.dart';
 import '../pages/vault_home_page.dart';
 
 class VaultSetupPage extends StatefulWidget {
@@ -26,6 +27,15 @@ class _VaultSetupPageState extends State<VaultSetupPage> {
   bool _obscure2 = true;
   bool _saving = false;
 
+  late final VaultAuthService _auth;
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ keep simple: service already registered in DI
+    _auth = Get.find<VaultAuthService>();
+  }
+
   @override
   void dispose() {
     _pin.dispose();
@@ -37,6 +47,7 @@ class _VaultSetupPageState extends State<VaultSetupPage> {
     final s = (v ?? "").trim();
     if (s.isEmpty) return "PIN required";
     if (s.length < 4) return "Minimum 4 digits";
+    if (s.length > 8) return "Maximum 8 digits";
     if (!RegExp(r"^\d+$").hasMatch(s)) return "Digits only";
     return null;
   }
@@ -53,15 +64,30 @@ class _VaultSetupPageState extends State<VaultSetupPage> {
 
     setState(() => _saving = true);
 
-    // NOTE:
-    // Abhi yahan actual secure PIN store nahi kiya (next step me hum VaultAuthService banayenge
-    // jo flutter_secure_storage / local_auth se securely store karega).
-    await Future.delayed(const Duration(milliseconds: 400));
+    try {
+      final pin = _pin.text.trim();
 
-    setState(() => _saving = false);
+      // ✅ Store PIN securely (your VaultAuthService handles secure storage + hash)
+      await _auth.setupPin(pin);
 
-    // Go to home (replace)
-    Get.off(() => const VaultHomePage());
+      // Go to home (replace)
+      Get.offAll(() => const VaultHomePage());
+    } catch (e) {
+      // ✅ keep UI same; just show a basic error
+      if (mounted) {
+        Get.snackbar(
+          "Error",
+          "Failed to save PIN. Please try again.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: TColors.error.withOpacity(0.12),
+          colorText: THelperFunctions.isDarkMode(context)
+              ? TColors.textWhite
+              : TColors.textPrimary,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -123,7 +149,6 @@ class _VaultSetupPageState extends State<VaultSetupPage> {
                 ),
               ),
               const SizedBox(height: TSizes.spaceBtwSections),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(TSizes.lg),
@@ -153,8 +178,11 @@ class _VaultSetupPageState extends State<VaultSetupPage> {
                           hintText: "Enter 4-8 digits",
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
-                            onPressed: () => setState(() => _obscure1 = !_obscure1),
-                            icon: Icon(_obscure1 ? Icons.visibility : Icons.visibility_off),
+                            onPressed: () =>
+                                setState(() => _obscure1 = !_obscure1),
+                            icon: Icon(_obscure1
+                                ? Icons.visibility
+                                : Icons.visibility_off),
                           ),
                           counterText: "",
                         ),
@@ -171,8 +199,11 @@ class _VaultSetupPageState extends State<VaultSetupPage> {
                           hintText: "Re-enter PIN",
                           prefixIcon: const Icon(Icons.verified_user_outlined),
                           suffixIcon: IconButton(
-                            onPressed: () => setState(() => _obscure2 = !_obscure2),
-                            icon: Icon(_obscure2 ? Icons.visibility : Icons.visibility_off),
+                            onPressed: () =>
+                                setState(() => _obscure2 = !_obscure2),
+                            icon: Icon(_obscure2
+                                ? Icons.visibility
+                                : Icons.visibility_off),
                           ),
                           counterText: "",
                         ),
@@ -203,7 +234,6 @@ class _VaultSetupPageState extends State<VaultSetupPage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: TSizes.spaceBtwItems),
               Container(
                 width: double.infinity,

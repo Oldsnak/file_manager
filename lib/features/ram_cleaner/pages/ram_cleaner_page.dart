@@ -13,15 +13,26 @@ class RamCleanerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = THelperFunctions.isDarkMode(context);
-    final c = Get.find<RamController>();
+
+    /// ✅ SAFE: if DI didn't register (hot reload / init issue),
+    /// we create it here without changing UI.
+    final RamController c = Get.isRegistered<RamController>()
+        ? Get.find<RamController>()
+        : Get.put(RamController(), permanent: true);
 
     final bgGradient = dark
         ? const RadialGradient(
-      colors: [TColors.darkGradientBackgroundStart, TColors.darkGradientBackgroundEnd],
+      colors: [
+        TColors.darkGradientBackgroundStart,
+        TColors.darkGradientBackgroundEnd
+      ],
       radius: 1.0,
     )
         : const RadialGradient(
-      colors: [TColors.lightGradientBackgroundStart, TColors.lightGradientBackgroundEnd],
+      colors: [
+        TColors.lightGradientBackgroundStart,
+        TColors.lightGradientBackgroundEnd
+      ],
       radius: 1.0,
     );
 
@@ -32,15 +43,22 @@ class RamCleanerPage extends StatelessWidget {
         appBar: AppBar(
           title: Text(
             "RAM Cleaner",
-            style: TextStyle(color: dark ? TColors.textWhite : TColors.textPrimary),
+            style: TextStyle(
+              color: dark ? TColors.textWhite : TColors.textPrimary,
+            ),
           ),
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
-          iconTheme: IconThemeData(color: dark ? TColors.textWhite : TColors.textPrimary),
+          iconTheme: IconThemeData(
+            color: dark ? TColors.textWhite : TColors.textPrimary,
+          ),
           actions: [
             IconButton(
               onPressed: c.refreshRam,
-              icon: Icon(Icons.refresh, color: dark ? TColors.textWhite : TColors.textPrimary),
+              icon: Icon(
+                Icons.refresh,
+                color: dark ? TColors.textWhite : TColors.textPrimary,
+              ),
             ),
           ],
         ),
@@ -78,7 +96,8 @@ class RamCleanerPage extends StatelessWidget {
                     children: [
                       Text(
                         "Memory Usage",
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        style:
+                        Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: titleColor,
                           fontWeight: FontWeight.w700,
                         ),
@@ -88,7 +107,8 @@ class RamCleanerPage extends StatelessWidget {
                       // Circle Percent + animation
                       Obx(() {
                         final cleaning = c.isCleaning.value;
-                        final animPercent = cleaning ? c.cleanProgress.value : percent;
+                        final animPercent =
+                        cleaning ? c.cleanProgress.value : percent;
 
                         return CircularPercentIndicator(
                           radius: 90,
@@ -97,7 +117,9 @@ class RamCleanerPage extends StatelessWidget {
                           animationDuration: 450,
                           percent: animPercent.clamp(0.0, 1.0),
                           circularStrokeCap: CircularStrokeCap.round,
-                          backgroundColor: dark ? TColors.darkOptionalContainer : TColors.lightOptionalContainer,
+                          backgroundColor: dark
+                              ? TColors.darkOptionalContainer
+                              : TColors.lightOptionalContainer,
                           progressColor: TColors.primary,
                           center: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 250),
@@ -117,7 +139,10 @@ class RamCleanerPage extends StatelessWidget {
                                 const SizedBox(height: 8),
                                 Text(
                                   "Cleaning...",
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
                                     color: subColor,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -130,14 +155,20 @@ class RamCleanerPage extends StatelessWidget {
                               children: [
                                 Text(
                                   "${(percent * 100).toInt()}%",
-                                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
                                     color: titleColor,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
                                 Text(
                                   "Used",
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
                                     color: subColor,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -179,18 +210,26 @@ class RamCleanerPage extends StatelessWidget {
                           width: double.infinity,
                           padding: const EdgeInsets.all(TSizes.md),
                           decoration: BoxDecoration(
-                            color: dark ? TColors.darkPrimaryContainer : TColors.lightPrimaryContainer,
-                            borderRadius: BorderRadius.circular(TSizes.borderRadiusLg),
-                            border: Border.all(color: TColors.primary.withOpacity(0.35)),
+                            color: dark
+                                ? TColors.darkPrimaryContainer
+                                : TColors.lightPrimaryContainer,
+                            borderRadius:
+                            BorderRadius.circular(TSizes.borderRadiusLg),
+                            border: Border.all(
+                                color: TColors.primary.withOpacity(0.35)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.auto_awesome, color: TColors.primary),
+                              const Icon(Icons.auto_awesome,
+                                  color: TColors.primary),
                               const SizedBox(width: TSizes.sm),
                               Expanded(
                                 child: Text(
                                   "Freed approx ${c.formatBytes(freed)}",
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
                                     color: titleColor,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -240,7 +279,12 @@ class RamCleanerPage extends StatelessWidget {
     );
   }
 
-  Widget _metric(BuildContext context, {required String title, required String value, required bool dark}) {
+  Widget _metric(
+      BuildContext context, {
+        required String title,
+        required String value,
+        required bool dark,
+      }) {
     final titleColor = dark ? TColors.darkGrey : TColors.textSecondary;
     final valueColor = dark ? TColors.textWhite : TColors.textPrimary;
 

@@ -3,7 +3,6 @@ import 'package:get/get_navigation/src/root/get_material_app.dart';
 import 'HomePage.dart';
 import 'foundation/constants/colors.dart';
 import 'foundation/helpers/helper_functions.dart';
-import 'foundation/routes/initial_binding.dart';
 import 'foundation/theme/app_theme.dart';
 
 
@@ -15,7 +14,6 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return GetMaterialApp(
         debugShowCheckedModeBanner: false,
-        initialBinding: InitialBinding(), // ✅ add
         themeMode: ThemeMode.system,
         theme: TAppTheme.lightTheme,
         darkTheme: TAppTheme.darkTheme,

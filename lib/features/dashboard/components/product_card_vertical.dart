@@ -140,28 +140,19 @@ class MedicalCardVertical extends StatelessWidget {
                     fileTile(
                       name: 'Documents',
                       space: 0.8,
-                      onTap: () => Get.to(() => const FileScanPage(
-                        title: "Documents",
-                        category: ScanCategory.documents,
-                      )),
+                      onTap: () => Get.to(() => const FileScanPage(title: "Documents", category: ScanCategory.documents,)),
                     ),
 
                     fileTile(
                       name: 'Downloads',
                       space: 0.0,
-                      onTap: () => Get.to(() => const FileScanPage(
-                        title: "Downloads",
-                        category: ScanCategory.downloads,
-                      )),
+                      onTap: () => Get.to(() => const FileScanPage(title: "Downloads", category: ScanCategory.downloads,)),
                     ),
 
                     fileTile(
                       name: 'Compresssed Files',
                       space: 0.0,
-                      onTap: () => Get.to(() => const FileScanPage(
-                        title: "Compressed Files",
-                        category: ScanCategory.compressed,
-                      )),
+                      onTap: () => Get.to(() => const FileScanPage(title: "Compressed Files", category: ScanCategory.compressed,)),
                     ),
 
                     fileTile(
@@ -185,10 +176,7 @@ class MedicalCardVertical extends StatelessWidget {
                     fileTile(
                       name: 'Apps',
                       space: 5.4,
-                      onTap: () => Get.to(() => const ComingSoonPage(
-                        title: "Apps",
-                        subtitle: "Apps listing needs additional Android package APIs.",
-                      )),
+                      onTap: () => Get.to(() => const ComingSoonPage(title: "Apps", subtitle: "Apps listing needs additional Android package APIs.",)),
                     ),
 
                     fileTile(
