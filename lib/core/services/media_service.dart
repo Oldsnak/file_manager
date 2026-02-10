@@ -147,6 +147,20 @@ class MediaService {
     return deleted.isNotEmpty;
   }
 
+  Future<int> getTotalCount(RequestType type) async {
+    // "All" album for this type
+    final paths = await PhotoManager.getAssetPathList(
+      type: type,
+      onlyAll: true,
+    );
+
+    if (paths.isEmpty) return 0;
+
+    // Total assets count in device for that type
+    final int count = await paths.first.assetCountAsync;
+    return count;
+  }
+
   Future<List<int>?> getThumbnailBytes(String assetId, {int size = 200}) async {
     final AssetEntity? a = await AssetEntity.fromId(assetId);
     if (a == null) return null;

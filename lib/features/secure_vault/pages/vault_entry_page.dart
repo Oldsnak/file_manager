@@ -211,6 +211,7 @@ class _VaultEntryPageState extends State<VaultEntryPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(_hasPin ? "Unlock Vault" : "Setup Vault", style: TextStyle(color: TColors.primary),),
         backgroundColor: Colors.transparent,
@@ -221,90 +222,95 @@ class _VaultEntryPageState extends State<VaultEntryPage> {
           : SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              _HeaderCard(
-                title: _hasPin ? "Secure Vault" : "Create Vault PIN",
-                subtitle: _hasPin
-                    ? "Enter your PIN to access Secure Vault."
-                    : "Set a PIN to protect your Secure Vault.",
-                icon: Icons.lock_rounded,
-              ),
-              const SizedBox(height: 16),
-
-              if (_error != null) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    _error!,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onErrorContainer,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              children: [
+                _HeaderCard(
+                  title: _hasPin ? "Secure Vault" : "Create Vault PIN",
+                  subtitle: _hasPin
+                      ? "Enter your PIN to access Secure Vault."
+                      : "Set a PIN to protect your Secure Vault.",
+                  icon: Icons.lock_rounded,
+                ),
+                const SizedBox(height: 16),
+            
+                if (_error != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      _error!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-              ],
-
-              _PinField(
-                controller: _pinCtrl,
-                label: _hasPin ? "PIN" : "Create PIN",
-                obscure: _obscure,
-                onToggleObscure: () => setState(() => _obscure = !_obscure),
-              ),
-
-              if (!_hasPin) ...[
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
+                ],
+            
                 _PinField(
-                  controller: _confirmCtrl,
-                  label: "Confirm PIN",
+                  controller: _pinCtrl,
+                  label: _hasPin ? "PIN" : "Create PIN",
                   obscure: _obscure,
-                  onToggleObscure: () =>
-                      setState(() => _obscure = !_obscure),
+                  onToggleObscure: () => setState(() => _obscure = !_obscure),
                 ),
-              ],
-
-              const SizedBox(height: 14),
-
-              if (_bioPossible) _biometricToggle(theme),
-
-              const Spacer(),
-
-              if (_hasPin) ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _unlockWithPin,
-                    child: const Text("Unlock"),
+            
+                if (!_hasPin) ...[
+                  const SizedBox(height: 12),
+                  _PinField(
+                    controller: _confirmCtrl,
+                    label: "Confirm PIN",
+                    obscure: _obscure,
+                    onToggleObscure: () =>
+                        setState(() => _obscure = !_obscure),
                   ),
-                ),
-                const SizedBox(height: 10),
-                if (_bioPossible && _bioEnabled)
+                ],
+            
+                const SizedBox(height: 14),
+            
+                if (_bioPossible) _biometricToggle(theme),
+
+                const SizedBox(height: 24),
+
+                if (_hasPin) ...[
                   SizedBox(
                     width: double.infinity,
                     height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _unlockWithBiometric,
-                      icon: const Icon(Icons.fingerprint),
-                      label: const Text("Use Biometrics"),
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _unlockWithPin,
+                      child: const Text("Unlock"),
                     ),
                   ),
-              ] else ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _setupPin,
-                    child: const Text("Create PIN"),
+                  const SizedBox(height: 10),
+                  if (_bioPossible && _bioEnabled)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _unlockWithBiometric,
+                        icon: const Icon(Icons.fingerprint),
+                        label: const Text("Use Biometrics"),
+                      ),
+                    ),
+                ] else ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _setupPin,
+                      child: const Text("Create PIN"),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

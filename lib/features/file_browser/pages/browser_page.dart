@@ -189,40 +189,96 @@ class _BrowserPageState extends State<BrowserPage> {
         color: accent,
         backgroundColor: dark ? TColors.darkContainer : TColors.lightContainer,
         onRefresh: c.refresh,
-        child: Stack(
+        child: Column(
           children: [
-            isGrid
-                ? GridView.builder(
-              controller: _scroll,
-              padding: const EdgeInsets.all(12),
-              gridDelegate:
-              const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-              itemCount: c.items.length,
-              itemBuilder: (_, i) => ItemGrid(item: c.items[i]),
-            )
-                : ListView.separated(
-              controller: _scroll,
-              padding: const EdgeInsets.all(12),
-              itemCount: c.items.length,
-              separatorBuilder: (_, __) => SizedBox(height: TSizes.sm,),
-              itemBuilder: (_, i) => ItemTile(item: c.items[i]),
-            ),
+            // ✅ Count card (hide when selection mode ON)
+            Obx(() {
+              if (c.selectionMode.value) return const SizedBox.shrink();
 
-            // Loading more indicator
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 8,
-              child: Obx(
-                    () => c.isLoadingMore.value
-                    ? Center(
-                  child: CircularProgressIndicator(color: accent),
-                )
-                    : const SizedBox.shrink(),
+              final count = c.totalCount.value;
+              final label = _labelForType(widget.type); // function neeche diya hai
+
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: dark ? TColors.darkContainer : TColors.lightContainer,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: dark ? TColors.darkGrey : TColors.grey,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withOpacity(dark ? 0.18 : 0.10),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        height: 42,
+                        width: 42,
+                        decoration: BoxDecoration(
+                          color: accent.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(_iconForType(widget.type), color: accent),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "$count $label on your device",
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: dark ? TColors.textWhite : TColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+
+            // ✅ list/grid must be Expanded
+            Expanded(
+              child: Stack(
+                children: [
+                  isGrid
+                      ? GridView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.all(12),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemCount: c.items.length,
+                    itemBuilder: (_, i) => ItemGrid(item: c.items[i]),
+                  )
+                      : ListView.separated(
+                    controller: _scroll,
+                    padding: const EdgeInsets.all(12),
+                    itemCount: c.items.length,
+                    separatorBuilder: (_, __) => SizedBox(height: TSizes.sm),
+                    itemBuilder: (_, i) => ItemTile(item: c.items[i]),
+                  ),
+
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 8,
+                    child: Obx(
+                          () => c.isLoadingMore.value
+                          ? Center(child: CircularProgressIndicator(color: accent))
+                          : const SizedBox.shrink(),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -230,4 +286,31 @@ class _BrowserPageState extends State<BrowserPage> {
       );
     });
   }
+
+  String _labelForType(RequestType type) {
+    switch (type) {
+      case RequestType.image:
+        return "photos";
+      case RequestType.video:
+        return "videos";
+      case RequestType.audio:
+        return "audios";
+      default:
+        return "files";
+    }
+  }
+
+  IconData _iconForType(RequestType type) {
+    switch (type) {
+      case RequestType.image:
+        return Icons.image_rounded;
+      case RequestType.video:
+        return Icons.videocam_rounded;
+      case RequestType.audio:
+        return Icons.audiotrack_rounded;
+      default:
+        return Icons.insert_drive_file_rounded;
+    }
+  }
+
 }

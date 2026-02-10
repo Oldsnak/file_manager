@@ -1,3 +1,4 @@
+import 'package:file_manager/foundation/helpers/helper_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_instance/src/extension_instance.dart';
@@ -15,6 +16,7 @@ class Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dash = Get.find<DashboardController>();
+    final bool dark = THelperFunctions.isDarkMode(context);
 
     return Scaffold(
 
@@ -37,7 +39,7 @@ class Dashboard extends StatelessWidget {
                       child: Column(
                         children: [
                           // -- Heading
-                          SectionHeading(title: 'Main Folders', showActionButton: false, textColor: Colors.black,),
+                          SectionHeading(title: 'Main Folders', showActionButton: false, textColor: dark ? Colors.black : Colors.white,),
                           SizedBox(height: TSizes.spaceBtwItems/2,),
 
                           // Categories

@@ -6,7 +6,9 @@ import 'controllers/dashboard_controller.dart';
 import 'controllers/file_browser_controller.dart';
 import 'controllers/ram_controller.dart';
 import 'controllers/vault_controller.dart';
-
+import 'services/downloader_service.dart';
+import 'services/social_detector_service.dart';
+import 'controllers/downloader_controller.dart';
 import 'services/file_scan_service.dart';
 import 'services/media_service.dart';
 import 'services/permission_service.dart';
@@ -45,5 +47,26 @@ class DependencyInjection {
 
     // ---------------- Vault Controller ----------------
     Get.put(VaultController(), permanent: true);
+
+    // ---------------- Downloader services ----------------
+    Get.put<SocialDetectorService>(const SocialDetectorService(), permanent: true);
+
+    Get.put<DownloaderService>(
+      DownloaderService(
+        baseUrl: "http://10.0.2.2:8000", // emulator
+        // apiKey: "YOUR_KEY_IF_ANY",
+      ),
+      permanent: true,
+    );
+
+// ---------------- Downloader controller ----------------
+    Get.put<DownloaderController>(
+      DownloaderController(
+        downloaderService: Get.find<DownloaderService>(),
+        socialDetector: Get.find<SocialDetectorService>(),
+      ),
+      permanent: true,
+    );
+
   }
 }

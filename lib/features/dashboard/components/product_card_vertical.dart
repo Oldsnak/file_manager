@@ -149,11 +149,11 @@ class MedicalCardVertical extends StatelessWidget {
                       onTap: () => Get.to(() => const FileScanPage(title: "Downloads", category: ScanCategory.downloads,)),
                     ),
 
-                    fileTile(
-                      name: 'Compresssed Files',
-                      space: 0.0,
-                      onTap: () => Get.to(() => const FileScanPage(title: "Compressed Files", category: ScanCategory.compressed,)),
-                    ),
+                    // fileTile(
+                    //   name: 'Compresssed Files',
+                    //   space: 0.0,
+                    //   onTap: () => Get.to(() => const FileScanPage(title: "Compressed Files", category: ScanCategory.compressed,)),
+                    // ),
 
                     fileTile(
                       name: 'Large files',
@@ -189,7 +189,7 @@ class MedicalCardVertical extends StatelessWidget {
                     ),
 
                     fileTile(
-                      name: 'Duplicate files',
+                      name: 'Duplicates',
                       space: 0.0,
                       onTap: () => Get.to(() => const ComingSoonPage(
                         title: "Duplicate Files",

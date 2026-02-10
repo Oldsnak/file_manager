@@ -1,13 +1,10 @@
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
+import 'package:file_manager/features/downloader/pages/downloader_home_page.dart';
 import 'package:file_manager/features/ram_cleaner/pages/ram_cleaner_page.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
-
-import 'core/services/vault_auth_service.dart';
 import 'features/dashboard/pages/dashboard_page.dart';
 import 'features/secure_vault/pages/vault_entry_page.dart';
-import 'features/secure_vault/pages/vault_setup_page.dart';
-
 import 'foundation/constants/colors.dart';
 import 'foundation/helpers/helper_functions.dart';
 
@@ -26,7 +23,7 @@ class _HomePageState extends State<HomePage> {
     const Dashboard(),
     const RamCleanerPage(),
     const _VaultGate(), // ✅ updated
-    const Scaffold(),
+    const DownloaderHomePage(),
   ];
 
   @override

@@ -1,11 +1,11 @@
 // lib/features/secure_vault/pages/vault_lock_page.dart
 import 'dart:io';
-
+import 'package:file_manager/foundation/constants/colors.dart';
+import 'package:file_manager/foundation/helpers/helper_functions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:open_filex/open_filex.dart';
-
 import '../../../core/controllers/vault_controller.dart';
 import '../../../core/models/vault_item.dart';
 
@@ -20,16 +20,18 @@ class VaultLockPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
+    final bool dark = THelperFunctions.isDarkMode(context);
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: TColors.primary,
         title: Obx(() {
           if (_c.selectionMode.value) {
             return Text("Selected: ${_c.selectedIds.length}");
           }
           return const Text("Secure Vault");
         }),
-        centerTitle: true,
+        // centerTitle: true,
         actions: [
           Obx(() {
             if (_c.selectionMode.value) {
@@ -88,6 +90,8 @@ class VaultLockPage extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: TColors.primary,
+        foregroundColor: dark ? Colors.black : Colors.white,
         onPressed: _c.pickAndLockFiles,
         icon: const Icon(Icons.add),
         label: const Text("Add files"),
@@ -366,13 +370,13 @@ class _EmptyState extends StatelessWidget {
               height: 84,
               width: 84,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.10),
+                color: TColors.primary.withOpacity(0.10),
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Icon(
                 Icons.lock_rounded,
                 size: 38,
-                color: theme.colorScheme.primary,
+                color: TColors.primary,
               ),
             ),
             const SizedBox(height: 14),
@@ -438,11 +442,11 @@ class _VaultListTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
+          color: TColors.primary.withOpacity(0.1),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected
-                ? theme.colorScheme.primary
+                ? TColors.primary
                 : theme.dividerColor.withOpacity(0.6),
           ),
         ),
@@ -477,7 +481,7 @@ class _VaultListTile extends StatelessWidget {
                     ? Icons.check_circle_rounded
                     : Icons.radio_button_unchecked_rounded,
                 color:
-                selected ? theme.colorScheme.primary : theme.iconTheme.color,
+                selected ? TColors.primary : theme.iconTheme.color,
               ),
             ],
           ],
@@ -513,11 +517,11 @@ class _VaultGridCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.6),
+          color: TColors.primary.withOpacity(0.1),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: selected
-                ? theme.colorScheme.primary
+                ? TColors.primary
                 : theme.dividerColor.withOpacity(0.6),
           ),
         ),
@@ -532,7 +536,7 @@ class _VaultGridCard extends StatelessWidget {
                     ? Icons.check_circle_rounded
                     : Icons.radio_button_unchecked_rounded,
                 color: selected
-                    ? theme.colorScheme.primary
+                    ? TColors.primary
                     : theme.iconTheme.color,
               )
                   : const SizedBox(height: 24, width: 24),
@@ -543,7 +547,7 @@ class _VaultGridCard extends StatelessWidget {
                 height: 66,
                 width: 66,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.10),
+                  color: TColors.primary.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: Center(child: _TypeIcon(type: item.type, size: 34)),
@@ -552,7 +556,7 @@ class _VaultGridCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               item.name,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleSmall,
             ),

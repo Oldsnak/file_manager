@@ -1,3 +1,4 @@
+import 'package:file_manager/foundation/helpers/helper_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_rx/src/rx_typedefs/rx_typedefs.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
@@ -58,6 +59,7 @@ class CategoryNameDisplayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool dark = THelperFunctions.isDarkMode(context);
     return GestureDetector(
       onTap: ontap,
       child: Container(
@@ -66,7 +68,7 @@ class CategoryNameDisplayer extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: TSizes.xs, horizontal: TSizes.sm),
         margin: EdgeInsets.only(bottom: TSizes.xs, right: TSizes.xs),
         decoration: BoxDecoration(
-          color: TColors.darkContainer,
+          color: dark ? TColors.darkContainer : Colors.white,
           borderRadius: BorderRadius.circular(TSizes.sm),
         ),
         child: Column(

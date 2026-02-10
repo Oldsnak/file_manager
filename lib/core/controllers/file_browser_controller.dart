@@ -36,6 +36,7 @@ class FileBrowserController extends GetxController {
   // -------------------- UI state --------------------
   final isLoading = false.obs;
   final isLoadingMore = false.obs;
+  final totalCount = 0.obs;
 
   final items = <BrowserItem>[].obs;
 
@@ -74,6 +75,13 @@ class FileBrowserController extends GetxController {
     // reset scan context
     _scanCategory = null;
     _scanFolderPath = null;
+
+    // ✅ total count for card
+    try {
+      totalCount.value = await _mediaService.getTotalCount(type);
+    } catch (_) {
+      totalCount.value = 0;
+    }
 
     await refresh();
   }
