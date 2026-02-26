@@ -1,5 +1,6 @@
 // lib/features/downloader/pages/social_webview_page.dart
 
+import 'package:file_manager/foundation/constants/sizes.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -91,18 +92,9 @@ class _SocialWebViewPageState extends State<SocialWebViewPage> {
     final title = _titleFromPlatform(widget.platform);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: "Refresh",
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
       body: Column(
         children: [
+          SizedBox(height: TSizes.appBarHeight,),
           if (_progress < 100)
             LinearProgressIndicator(
               value: _progress / 100.0,

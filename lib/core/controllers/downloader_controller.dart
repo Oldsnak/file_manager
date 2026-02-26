@@ -1,9 +1,15 @@
 // lib/core/controllers/downloader_controller.dart
 
 import 'dart:async';
+import 'dart:io';
 
+import 'package:external_path/external_path.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:media_scanner/media_scanner.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../models/video_info_model.dart';
 import '../models/video_quality_model.dart';
@@ -42,6 +48,12 @@ class DownloaderController extends ChangeNotifier {
   String? _publicUrl; // when finished
   String? _jobError;
 
+  /// After job finishes, file is downloaded from API and saved to device.
+  String? _lastSavedFilePath;
+  String? _lastSaveError;
+  String? _saveTriggeredForJobId;
+  bool _isSavingToDevice = false;
+
   StreamSubscription<Map<String, dynamic>>? _sseSub;
   Timer? _pollTimer;
 
@@ -65,8 +77,21 @@ class DownloaderController extends ChangeNotifier {
   String? get publicUrl => _publicUrl;
   String? get jobError => _jobError;
 
+  /// Path where the last completed download was saved (e.g. Downloads folder).
+  String? get lastSavedFilePath => _lastSavedFilePath;
+  /// Error message if saving to device failed.
+  String? get lastSaveError => _lastSaveError;
+  bool get isSavingToDevice => _isSavingToDevice;
+
   bool get hasVideoInfo => _videoInfo != null;
   bool get canStartDownload => _videoInfo != null && _selectedQuality != null;
+
+  /// Call after showing [lastSavedFilePath] or [lastSaveError] in UI so it is not shown again.
+  void clearLastSaveResult() {
+    _lastSavedFilePath = null;
+    _lastSaveError = null;
+    notifyListeners();
+  }
 
   // -----------------------
   // Main Actions
@@ -218,6 +243,8 @@ class DownloaderController extends ChangeNotifier {
           _isDownloading = false;
           _stopPolling();
           _sseSub?.cancel();
+          final id = _jobId;
+          if (id != null) _onJobFinished(id);
         } else if (_jobStatus == 'failed') {
           _isDownloading = false;
           _stopPolling();
@@ -255,6 +282,7 @@ class DownloaderController extends ChangeNotifier {
         if (_jobStatus == 'finished' || _jobStatus == 'failed') {
           _isDownloading = false;
           _stopPolling();
+          if (_jobStatus == 'finished' && jobId != null) _onJobFinished(jobId);
         }
 
         notifyListeners();
@@ -263,6 +291,108 @@ class DownloaderController extends ChangeNotifier {
         debugPrint("Polling error: $e");
       }
     });
+  }
+
+  /// Called once when job reaches "finished". Downloads file from API and saves to device.
+  Future<void> _onJobFinished(String jobId) async {
+    if (_saveTriggeredForJobId == jobId) return;
+    _saveTriggeredForJobId = jobId;
+    await _saveDownloadToDevice(jobId);
+  }
+
+  /// App folder name at root of internal storage (e.g. /storage/emulated/0/FileManager).
+  static const String _appDownloadFolderName = 'FileManager';
+
+  Future<void> _saveDownloadToDevice(String jobId) async {
+    _lastSavedFilePath = null;
+    _lastSaveError = null;
+    _isSavingToDevice = true;
+    notifyListeners();
+
+    try {
+      if (Platform.isAndroid) {
+        final PermissionStatus status = await _requestStoragePermission();
+        if (!status.isGranted) {
+          _lastSaveError = 'Storage permission required. Enable in app settings.';
+          _isSavingToDevice = false;
+          notifyListeners();
+          return;
+        }
+      }
+
+      final String dirPath = await _getAppDownloadDirectoryPath();
+      if (dirPath.isEmpty) {
+        _lastSaveError = 'Storage folder not available. Grant storage permission.';
+        _isSavingToDevice = false;
+        notifyListeners();
+        return;
+      }
+
+      final dir = Directory(dirPath);
+      if (!await dir.exists()) await dir.create(recursive: true);
+
+      final file = await downloaderService.downloadFile(jobId);
+      final safeName = _safeFileName(file.filename) ?? '$jobId.mp4';
+      final outFile = File(path.join(dirPath, safeName));
+      await outFile.writeAsBytes(file.bytes);
+
+      if (Platform.isAndroid) {
+        try {
+          await MediaScanner.loadMedia(path: outFile.path);
+        } catch (e) {
+          debugPrint('MediaScanner failed (video still saved): $e');
+        }
+      }
+
+      _lastSavedFilePath = outFile.path;
+      _lastSaveError = null;
+    } catch (e) {
+      _lastSaveError = 'Save failed: $e';
+      debugPrint('Save download to device failed: $e');
+    } finally {
+      _isSavingToDevice = false;
+      notifyListeners();
+    }
+  }
+
+  Future<PermissionStatus> _requestStoragePermission() async {
+    if (await Permission.manageExternalStorage.isGranted) return PermissionStatus.granted;
+    if (await Permission.storage.isGranted) return PermissionStatus.granted;
+    final manage = await Permission.manageExternalStorage.request();
+    if (manage.isGranted) return PermissionStatus.granted;
+    final storage = await Permission.storage.request();
+    return storage;
+  }
+
+  /// Returns path to app folder in user-visible storage:
+  /// Android: Download/FileManager (e.g. /storage/emulated/0/Download/FileManager).
+  /// Falls back to app-specific dir if public path is not available.
+  Future<String> _getAppDownloadDirectoryPath() async {
+    if (Platform.isAndroid) {
+      try {
+        // Prefer public Download folder so files are visible in Files app and can be scanned to gallery
+        final String publicDownload = await ExternalPath.getExternalStoragePublicDirectory(
+          ExternalPath.DIRECTORY_DOWNLOAD,
+        );
+        if (publicDownload.trim().isNotEmpty) {
+          return path.join(publicDownload.trim(), _appDownloadFolderName);
+        }
+      } catch (e) {
+        debugPrint('ExternalPath getExternalStoragePublicDirectory failed: $e');
+      }
+      try {
+        final List<String>? roots = await ExternalPath.getExternalStorageDirectories();
+        if (roots != null && roots.isNotEmpty && roots.first.trim().isNotEmpty) {
+          return path.join(roots.first.trim(), _appDownloadFolderName);
+        }
+      } catch (e) {
+        debugPrint('ExternalPath getExternalStorageDirectories failed: $e');
+      }
+    }
+    final dir = await getDownloadsDirectory();
+    if (dir != null) return dir.path;
+    final appDir = await getApplicationDocumentsDirectory();
+    return path.join(appDir.path, _appDownloadFolderName);
   }
 
   void _stopPolling() {
@@ -290,6 +420,9 @@ class DownloaderController extends ChangeNotifier {
     _publicUrl = null;
     _jobError = null;
     _isDownloading = false;
+    _lastSavedFilePath = null;
+    _lastSaveError = null;
+    _saveTriggeredForJobId = null;
 
     _sseSub?.cancel();
     _sseSub = null;

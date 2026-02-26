@@ -1,4 +1,5 @@
 import 'package:file_manager/features/downloader/components/social_apps.dart';
+import 'package:file_manager/foundation/constants/api_config.dart';
 import 'package:file_manager/foundation/constants/assets.dart';
 import 'package:file_manager/foundation/helpers/helper_functions.dart';
 import 'package:flutter/material.dart';
@@ -14,19 +15,62 @@ import '../../../core/services/downloader_service.dart';
 import '../../../core/services/social_detector_service.dart';
 import '../../../core/models/video_quality_model.dart';
 
-class DownloaderHomePage extends StatelessWidget {
+class DownloaderHomePage extends StatefulWidget {
   const DownloaderHomePage({super.key});
+
+  @override
+  State<DownloaderHomePage> createState() => _DownloaderHomePageState();
+}
+
+class _DownloaderHomePageState extends State<DownloaderHomePage> {
+  int _providerKey = 0;
+
+  void _showBackendUrlDialog() {
+    final controller = TextEditingController(text: ApiConfig.effectiveBaseUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Backend URL (real device)'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'http://192.168.1.10:8000',
+            labelText: 'Video downloader API URL',
+          ),
+          keyboardType: TextInputType.url,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final url = controller.text.trim();
+              if (url.isNotEmpty) {
+                ApiConfig.setVideoDownloaderBaseUrl(url);
+                setState(() => _providerKey++);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final bool dark = THelperFunctions.isDarkMode(context);
 
-    // ✅ Local provider so you don't need global app wiring right now.
     return ChangeNotifierProvider(
+      key: ValueKey(_providerKey),
       create: (_) => DownloaderController(
         downloaderService: DownloaderService(
-          baseUrl: _inferBaseUrlForDevice(),
-          // apiKey: "YOUR_KEY_IF_ANY",
+          baseUrl: ApiConfig.effectiveBaseUrl,
+          apiKey: ApiConfig.effectiveApiKey,
         ),
         socialDetector: const SocialDetectorService(),
       ),
@@ -34,7 +78,7 @@ class DownloaderHomePage extends StatelessWidget {
         builder: (context) {
           final c = context.watch<DownloaderController>();
 
-          // Show errors as snackbar (no UI layout changes)
+          // Show errors and save result as snackbar
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final err = c.error;
             if (err != null && err.trim().isNotEmpty) {
@@ -44,6 +88,26 @@ class DownloaderHomePage extends StatelessWidget {
                   backgroundColor: Colors.red.shade700,
                 ),
               );
+            }
+            final saveErr = c.lastSaveError;
+            if (saveErr != null && saveErr.trim().isNotEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(saveErr),
+                  backgroundColor: Colors.orange.shade700,
+                ),
+              );
+              c.clearLastSaveResult();
+            }
+            final savedPath = c.lastSavedFilePath;
+            if (savedPath != null && savedPath.trim().isNotEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Saved to $savedPath'),
+                  backgroundColor: Colors.green.shade700,
+                ),
+              );
+              c.clearLastSaveResult();
             }
           });
 
@@ -83,14 +147,58 @@ class DownloaderHomePage extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Center(
-                          child: Text(
-                            "Download your videos here!",
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium!
-                                .apply(color: TColors.primary),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  "Download your videos here!",
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium!
+                                      .apply(color: TColors.primary),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () {
+                                  context.findAncestorStateOfType<_DownloaderHomePageState>()
+                                      ?._showBackendUrlDialog();
+                                },
+                                icon: Icon(Icons.link, color: TColors.primary),
+                                tooltip: 'Set backend URL (for real device)',
+                              ),
+                            ],
                           ),
                         ),
+                        if (ApiConfig.effectiveBaseUrl.contains('10.0.2.2'))
+                          Padding(
+                            padding: const EdgeInsets.only(top: TSizes.sm),
+                            child: Material(
+                              color: Colors.amber.shade100,
+                              borderRadius: BorderRadius.circular(TSizes.sm),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: TSizes.md,
+                                  vertical: TSizes.sm,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, size: 20, color: Colors.amber.shade900),
+                                    const SizedBox(width: TSizes.sm),
+                                    Expanded(
+                                      child: Text(
+                                        'On a real device, tap the link icon above and set your PC\'s IP (e.g. http://192.168.1.10:8000).',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.amber.shade900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         SizedBox(height: TSizes.spaceBtwSections),
 
                         // Search Bar
@@ -240,7 +348,7 @@ class DownloaderHomePage extends StatelessWidget {
                           ),
                         ),
 
-                        // Optional: show progress via snackbar without UI layout changes
+                        // Download progress
                         if (c.isDownloading && c.progress != null)
                           Padding(
                             padding: const EdgeInsets.only(top: TSizes.sm),
@@ -250,6 +358,28 @@ class DownloaderHomePage extends StatelessWidget {
                                   .textTheme
                                   .bodyMedium
                                   ?.copyWith(color: TColors.primary, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        if (c.isSavingToDevice)
+                          Padding(
+                            padding: const EdgeInsets.only(top: TSizes.sm),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: TColors.primary),
+                                ),
+                                const SizedBox(width: TSizes.sm),
+                                Text(
+                                  'Saving to device...',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(color: TColors.primary, fontWeight: FontWeight.bold),
+                                ),
+                              ],
                             ),
                           ),
                       ],
@@ -263,14 +393,6 @@ class DownloaderHomePage extends StatelessWidget {
         },
       ),
     );
-  }
-
-  // 🔧 You can later move this to constants.
-  // For emulator: 10.0.2.2
-  // For real phone: your PC IP on WiFi (e.g. 192.168.1.10)
-  static String _inferBaseUrlForDevice() {
-    // Safe default for Android emulator:
-    return "http://10.0.2.2:8000";
   }
 
   static void _showQualityPicker(BuildContext context, DownloaderController c) {

@@ -2,6 +2,8 @@
 
 import 'package:get/get.dart';
 
+import 'package:file_manager/foundation/constants/api_config.dart';
+
 import 'controllers/dashboard_controller.dart';
 import 'controllers/file_browser_controller.dart';
 import 'controllers/ram_controller.dart';
@@ -53,8 +55,8 @@ class DependencyInjection {
 
     Get.put<DownloaderService>(
       DownloaderService(
-        baseUrl: "http://10.0.2.2:8000", // emulator
-        // apiKey: "YOUR_KEY_IF_ANY",
+        baseUrl: ApiConfig.effectiveBaseUrl,
+        apiKey: ApiConfig.effectiveApiKey,
       ),
       permanent: true,
     );

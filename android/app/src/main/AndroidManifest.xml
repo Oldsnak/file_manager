@@ -18,8 +18,10 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- (Optional) If you ever write/delete via File APIs on old devices -->
-    <!-- <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/> -->
+    <!-- Required for saving downloads to app folder on external storage (e.g. /storage/emulated/0/FileManager) -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <application
         android:label="file_manager"

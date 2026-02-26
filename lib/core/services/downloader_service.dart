@@ -159,7 +159,10 @@ class DownloaderService {
   // -------------------------
   // API: /files/{job_id}
   // -------------------------
-  Future<Uint8List> downloadFileBytes(String jobId) async {
+
+  /// Downloads the completed file and returns bytes + filename from Content-Disposition.
+  /// Use this when job status is "finished" to save the file to device storage.
+  Future<DownloadedFile> downloadFile(String jobId) async {
     final resp = await _client.get(
       _u('/api/v1/files/$jobId'),
       headers: _headers(jsonBody: false),
@@ -169,7 +172,26 @@ class DownloaderService {
       throw ApiException('File download failed', resp.statusCode, resp.body);
     }
 
-    return resp.bodyBytes;
+    final filename = _parseContentDispositionFilename(resp.headers['content-disposition']);
+    return DownloadedFile(
+      bytes: resp.bodyBytes,
+      filename: filename ?? '$jobId.mp4',
+    );
+  }
+
+  /// Legacy: raw bytes only (no filename). Prefer [downloadFile] to get filename.
+  Future<Uint8List> downloadFileBytes(String jobId) async {
+    final f = await downloadFile(jobId);
+    return f.bytes;
+  }
+
+  static String? _parseContentDispositionFilename(String? value) {
+    if (value == null || value.isEmpty) return null;
+    // Matches: filename="video.mp4" or filename='video.mp4'
+    final match = RegExp('filename\\s*=\\s*["\']?([^"\';]+)["\']?').firstMatch(value);
+    final name = match?.group(1)?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return null;
   }
 
   void dispose() {
@@ -180,6 +202,14 @@ class DownloaderService {
 // -------------------------
 // DTOs for API responses
 // -------------------------
+
+/// Result of downloading a completed file from the API (for saving to device).
+class DownloadedFile {
+  final Uint8List bytes;
+  final String filename;
+
+  const DownloadedFile({required this.bytes, required this.filename});
+}
 
 class LinkCheckResult {
   final bool valid;
