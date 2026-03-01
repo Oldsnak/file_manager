@@ -201,6 +201,18 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
                           ),
                         SizedBox(height: TSizes.spaceBtwSections),
 
+                        // Playlist toggle
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: c.isPlaylistMode,
+                              onChanged: (value) => c.setPlaylistMode(value ?? false),
+                            ),
+                            const SizedBox(width: TSizes.sm),
+                            const Text('Playlist'),
+                          ],
+                        ),
+
                         // Search Bar
                         Container(
                           width: double.infinity,
@@ -280,10 +292,12 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
                                       ),
                                     ],
                                   ),
-                                  child: IconButton(
-                                    onPressed: c.isChecking || c.isFetchingInfo
-                                        ? null
-                                        : () => c.fetchVideoInfo(),
+                              child: IconButton(
+                                onPressed: c.isChecking || c.isFetchingInfo
+                                    ? null
+                                    : () => c.isPlaylistMode
+                                        ? c.fetchPlaylistInfo()
+                                        : c.fetchVideoInfo(),
                                     icon: c.isChecking || c.isFetchingInfo
                                         ? const SizedBox(
                                       width: 22,
@@ -304,62 +318,62 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
 
                         const SizedBox(height: TSizes.spaceBtwSections),
 
-                        // Downloader card (same UI, data dynamic)
-                        _DownloaderCard(
-                          title: c.videoInfo?.title ??
-                              "Paste a link and press the arrow button",
-                          thumbnailUrl: c.videoInfo?.thumbnail,
-                          fallbackAsset: thumbnail,
-                          selectedQuality: c.selectedQuality,
-                          onPickQuality: c.videoInfo?.formats.isNotEmpty == true
-                              ? () => _showQualityPicker(context, c)
-                              : null,
-                          isLoading: c.isChecking || c.isFetchingInfo,
-                        ),
+                        // Single-video downloader card: only after backend returns info
+                        if (!c.isPlaylistMode && c.videoInfo != null)
+                          _DownloaderCard(
+                            title: c.videoInfo!.title ?? "Untitled video",
+                            thumbnailUrl: c.videoInfo!.thumbnail,
+                            fallbackAsset: thumbnail,
+                            selectedQuality: c.selectedQuality,
+                            onPickQuality: c.videoInfo!.formats.isNotEmpty
+                                ? () => _showQualityPicker(context, c)
+                                : null,
+                            isLoading: c.isChecking || c.isFetchingInfo,
+                            isDownloading: c.isDownloading,
+                            progressValue: c.progressValue,
+                            canStartDownload: c.canStartDownload && !c.isStarting && !c.isDownloading,
+                            onDownload: c.canStartDownload && !c.isStarting && !c.isDownloading
+                                ? () => c.startDownload()
+                                : null,
+                          ),
 
-                        SizedBox(height: TSizes.spaceBtwItems),
-
-                        // Download button (same UI)
-                        GestureDetector(
-                          onTap: c.isStarting || !c.canStartDownload ? null : () => c.startDownload(),
-                          child: Opacity(
-                            opacity: (c.isStarting || !c.canStartDownload) ? 0.6 : 1.0,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: TColors.primary,
-                                borderRadius: BorderRadius.circular(TSizes.lg),
+                        // Playlist UI
+                        if (c.isPlaylistMode && c.hasPlaylist) ...[
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: c.areAllSelected,
+                                onChanged: (value) => c.toggleSelectAll(value ?? false),
                               ),
-                              child: IconButton(
-                                onPressed: c.isStarting || !c.canStartDownload
-                                    ? null
-                                    : () => c.startDownload(),
-                                icon: c.isStarting
-                                    ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                              const Text('Select All'),
+                            ],
+                          ),
+                          const SizedBox(height: TSizes.sm),
+                          Column(
+                            children: c.playlistItems
+                                .map(
+                                  (item) => _PlaylistItemCard(
+                                    item: item,
+                                    onToggleSelected: (val) =>
+                                        c.toggleItemSelected(item.id, val),
+                                    onPickQuality: () =>
+                                        _showPlaylistQualityPicker(context, c, item),
+                                  ),
                                 )
-                                    : Icon(
-                                  Icons.arrow_downward,
-                                  color: TColors.dark,
-                                ),
-                              ),
+                                .toList(),
+                          ),
+                          const SizedBox(height: TSizes.sm),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed:
+                                  c.hasAnySelected ? () => c.startPlaylistDownload() : null,
+                              icon: const Icon(Icons.download),
+                              label: const Text('Download selected'),
                             ),
                           ),
-                        ),
+                        ],
 
-                        // Download progress
-                        if (c.isDownloading && c.progress != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: TSizes.sm),
-                            child: Text(
-                              "${c.progress!.speedHuman ?? ''}  -  ${c.progress!.downloadedHuman}",
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(color: TColors.primary, fontWeight: FontWeight.bold),
-                            ),
-                          ),
                         if (c.isSavingToDevice)
                           Padding(
                             padding: const EdgeInsets.only(top: TSizes.sm),
@@ -428,6 +442,122 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
       },
     );
   }
+
+  static void _showPlaylistQualityPicker(
+    BuildContext context,
+    DownloaderController c,
+    PlaylistItemVM item,
+  ) {
+    final formats = item.qualities;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      builder: (_) {
+        return SafeArea(
+          child: ListView.separated(
+            itemCount: formats.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final f = formats[i];
+              final selected = item.selectedQuality?.formatId == f.formatId;
+
+              return ListTile(
+                title: Text(
+                  f.quality.toUpperCase(),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(f.filesizeHuman ?? ""),
+                trailing: selected ? const Icon(Icons.check_circle) : null,
+                onTap: () {
+                  c.selectQualityForItem(item.id, f);
+                  Navigator.pop(context);
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PlaylistItemCard extends StatelessWidget {
+  final PlaylistItemVM item;
+  final ValueChanged<bool> onToggleSelected;
+  final VoidCallback onPickQuality;
+
+  const _PlaylistItemCard({
+    required this.item,
+    required this.onToggleSelected,
+    required this.onPickQuality,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final qualityText = (item.selectedQuality?.quality ?? '--').toUpperCase();
+    final sizeText = item.selectedQuality?.filesizeHuman ?? '--';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: TSizes.sm),
+      padding: const EdgeInsets.all(TSizes.sm),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TSizes.md),
+        border: Border.all(color: TColors.primary.withOpacity(0.6)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Checkbox(
+            value: item.selected,
+            onChanged: (value) => onToggleSelected(value ?? false),
+          ),
+          SizedBox(
+            width: 80,
+            height: 56,
+            child: _Thumb(
+              thumbnailUrl: item.thumbnail,
+              fallbackAsset: thumbnail,
+            ),
+          ),
+          const SizedBox(width: TSizes.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Quality: $qualityText',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Text(
+                  'Size: $sizeText',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton(
+                    onPressed: onPickQuality,
+                    child: const Text('Change quality'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DownloaderCard extends StatelessWidget {
@@ -437,6 +567,10 @@ class _DownloaderCard extends StatelessWidget {
   final VideoQualityModel? selectedQuality;
   final VoidCallback? onPickQuality;
   final bool isLoading;
+   final bool isDownloading;
+   final double? progressValue;
+   final bool canStartDownload;
+   final VoidCallback? onDownload;
 
   const _DownloaderCard({
     required this.title,
@@ -445,6 +579,10 @@ class _DownloaderCard extends StatelessWidget {
     required this.selectedQuality,
     required this.onPickQuality,
     required this.isLoading,
+    required this.isDownloading,
+    required this.progressValue,
+    required this.canStartDownload,
+    required this.onDownload,
   });
 
   @override
@@ -455,118 +593,172 @@ class _DownloaderCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(TSizes.md),
       width: double.infinity,
-      height: 150,
+      height: 250,
       decoration: BoxDecoration(
         color: TColors.primary.withOpacity(0.2),
         borderRadius: BorderRadius.circular(TSizes.lg),
         border: Border.all(color: TColors.primary),
       ),
-      child: Row(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(
-            flex: 2,
-            child: Container(
-              height: double.infinity,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: TColors.dark.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: TColors.dark),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: _Thumb(
-                thumbnailUrl: thumbnailUrl,
-                fallbackAsset: fallbackAsset,
-              ),
+          Container(
+            // padding: EdgeInsets.all(TSizes.md),
+            width: double.infinity,
+            height: 150,
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(TSizes.lg),
+              // border: Border.all(color: TColors.primary),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Container(
-              margin: EdgeInsets.only(left: TSizes.lg),
-              child: Column(
-                children: [
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall!
-                        .apply(color: TColors.primary),
-                  ),
-                  SizedBox(height: TSizes.spaceBtwItems),
-                  Container(
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    height: double.infinity,
                     width: double.infinity,
-                    height: 50,
                     decoration: BoxDecoration(
-                      color: TColors.dark.withOpacity(0.5),
-                      border: Border.all(color: TColors.primary),
-                      borderRadius: BorderRadius.circular(TSizes.md),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: Padding(
-                            padding: const EdgeInsets.all(TSizes.sm),
-                            child: isLoading
-                                ? Text(
-                              "Loading...",
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: TColors.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            )
-                                : Text(
-                              sizeText,
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: TColors.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 4,
-                          child: GestureDetector(
-                            onTap: onPickQuality,
-                            child: Container(
-                              height: double.infinity,
-                              decoration: BoxDecoration(
-                                color: TColors.primary,
-                                borderRadius: BorderRadius.circular(TSizes.md),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    qualityText,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyLarge
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  const Icon(Icons.arrow_drop_down),
-                                ],
-                              ),
-                            ),
-                          ),
+                      color: TColors.dark.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: TColors.dark),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
+                    child: _Thumb(
+                      thumbnailUrl: thumbnailUrl,
+                      fallbackAsset: fallbackAsset,
+                    ),
                   ),
-                ],
-              ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    margin: EdgeInsets.only(left: TSizes.lg),
+                    child: Column(
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall!
+                              .apply(color: TColors.primary),
+                        ),
+                        SizedBox(height: TSizes.spaceBtwItems),
+                        if (!isDownloading) ...[
+                          Container(
+                            width: double.infinity,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: TColors.dark.withOpacity(0.5),
+                              border: Border.all(color: TColors.primary),
+                              borderRadius: BorderRadius.circular(TSizes.md),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  flex: 5,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(TSizes.sm),
+                                    child: isLoading
+                                        ? Text(
+                                            "Loading...",
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.copyWith(
+                                                  color: TColors.primary,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          )
+                                        : Text(
+                                            sizeText,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.copyWith(
+                                                  color: TColors.primary,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 4,
+                                  child: GestureDetector(
+                                    onTap: onPickQuality,
+                                    child: Container(
+                                      height: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: TColors.primary,
+                                        borderRadius: BorderRadius.circular(TSizes.md),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            qualityText,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.copyWith(fontWeight: FontWeight.bold),
+                                          ),
+                                          const Icon(Icons.arrow_drop_down),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          LinearProgressIndicator(
+                            value: progressValue,
+                          ),
+                          const SizedBox(height: TSizes.sm),
+                          if (progressValue != null)
+                            Text(
+                              '${(progressValue! * 100).toStringAsFixed(0)}% downloaded',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: TColors.primary, fontWeight: FontWeight.bold),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: TSizes.sm),
+          if (onDownload != null || isDownloading)
+            SizedBox(
+              height: 48,
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: canStartDownload && !isDownloading ? onDownload : null,
+                icon: isDownloading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download),
+                label: const Text('Download'),
+              ),
+            ),
         ],
       ),
     );

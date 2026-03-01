@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:external_path/external_path.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:media_scanner/media_scanner.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -26,7 +27,9 @@ class DownloaderController extends ChangeNotifier {
   DownloaderController({
     required this.downloaderService,
     required this.socialDetector,
-  });
+  }) {
+    _restoreActiveJobIfAny();
+  }
 
   // -----------------------
   // State
@@ -57,10 +60,14 @@ class DownloaderController extends ChangeNotifier {
   StreamSubscription<Map<String, dynamic>>? _sseSub;
   Timer? _pollTimer;
 
+  bool _isPlaylistMode = false;
+  final List<PlaylistItemVM> _playlistItems = [];
+
   // -----------------------
   // Getters for UI
   // -----------------------
   bool get isChecking => _isChecking;
+  bool get isPlaylistMode => _isPlaylistMode;
   bool get isFetchingInfo => _isFetchingInfo;
   bool get isStarting => _isStarting;
   bool get isDownloading => _isDownloading;
@@ -77,6 +84,16 @@ class DownloaderController extends ChangeNotifier {
   String? get publicUrl => _publicUrl;
   String? get jobError => _jobError;
 
+  /// 0–1 value derived from [_progress.percent] (0–100) for LinearProgressIndicator.
+  double? get progressValue {
+    final p = _progress;
+    if (p == null || p.percent == null) return null;
+    final raw = p.percent!;
+    if (raw.isNaN) return null;
+    final clamped = raw.clamp(0, 100);
+    return (clamped is num ? clamped.toDouble() : 0.0) / 100.0;
+  }
+
   /// Path where the last completed download was saved (e.g. Downloads folder).
   String? get lastSavedFilePath => _lastSavedFilePath;
   /// Error message if saving to device failed.
@@ -85,6 +102,12 @@ class DownloaderController extends ChangeNotifier {
 
   bool get hasVideoInfo => _videoInfo != null;
   bool get canStartDownload => _videoInfo != null && _selectedQuality != null;
+
+  List<PlaylistItemVM> get playlistItems => List.unmodifiable(_playlistItems);
+  bool get hasPlaylist => _playlistItems.isNotEmpty;
+  bool get areAllSelected =>
+      _playlistItems.isNotEmpty && _playlistItems.every((it) => it.selected);
+  bool get hasAnySelected => _playlistItems.any((it) => it.selected);
 
   /// Call after showing [lastSavedFilePath] or [lastSaveError] in UI so it is not shown again.
   void clearLastSaveResult() {
@@ -169,6 +192,96 @@ class DownloaderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPlaylistMode(bool value) {
+    if (_isPlaylistMode == value) return;
+    _isPlaylistMode = value;
+    _playlistItems.clear();
+    if (value) {
+      // entering playlist mode – clear single-video state
+      _videoInfo = null;
+      _selectedQuality = null;
+    }
+    notifyListeners();
+  }
+
+  Future<void> fetchPlaylistInfo() async {
+    final raw = urlController.text.trim();
+    if (raw.isEmpty) {
+      _setError("Please paste a playlist link first.");
+      return;
+    }
+
+    _clearError();
+    _resetJobState();
+    _playlistItems.clear();
+
+    final normalized = socialDetector.normalizeUrl(raw);
+
+    _isFetchingInfo = true;
+    notifyListeners();
+
+    try {
+      final playlist = await downloaderService.getPlaylistInfo(normalized);
+      _playlistItems.clear();
+      for (final v in playlist.videos) {
+        _playlistItems.add(
+          PlaylistItemVM(
+            info: v,
+            selected: true,
+            selectedQuality: v.bestQuality,
+          ),
+        );
+      }
+    } catch (e) {
+      _setError("Failed to fetch playlist info: $e");
+    } finally {
+      _isFetchingInfo = false;
+      notifyListeners();
+    }
+  }
+
+  void toggleSelectAll(bool value) {
+    for (final item in _playlistItems) {
+      item.selected = value;
+    }
+    notifyListeners();
+  }
+
+  void toggleItemSelected(String id, bool value) {
+    final item = _playlistItems.firstWhere(
+      (it) => it.id == id,
+      orElse: () => throw ArgumentError('Playlist item not found: $id'),
+    );
+    item.selected = value;
+    notifyListeners();
+  }
+
+  void selectQualityForItem(String id, VideoQualityModel q) {
+    final item = _playlistItems.firstWhere(
+      (it) => it.id == id,
+      orElse: () => throw ArgumentError('Playlist item not found: $id'),
+    );
+    item.selectedQuality = q;
+    notifyListeners();
+  }
+
+  Future<void> startPlaylistDownload() async {
+    if (!hasAnySelected) {
+      _setError("Please select at least one video from the playlist.");
+      return;
+    }
+
+    _clearError();
+
+    // Sequentially start backend jobs for selected videos.
+    for (final item in _playlistItems.where((it) => it.selected)) {
+      _videoInfo = item.info;
+      _selectedQuality = item.selectedQuality ?? item.info.bestQuality;
+      if (_videoInfo == null || _selectedQuality == null) continue;
+      await startDownload();
+    }
+  }
+
   /// Call this when user presses final download button.
   Future<void> startDownload() async {
     if (!canStartDownload) {
@@ -196,6 +309,11 @@ class DownloaderController extends ChangeNotifier {
       _jobId = started.jobId;
       _jobStatus = started.status;
       _isDownloading = true;
+
+      // persist active job id so we can restore after app restart
+      try {
+        GetStorage().write(_activeJobStorageKey, {'job_id': _jobId});
+      } catch (_) {}
 
       notifyListeners();
 
@@ -297,11 +415,43 @@ class DownloaderController extends ChangeNotifier {
   Future<void> _onJobFinished(String jobId) async {
     if (_saveTriggeredForJobId == jobId) return;
     _saveTriggeredForJobId = jobId;
+    // clear persisted active job
+    try {
+      GetStorage().remove(_activeJobStorageKey);
+    } catch (_) {}
     await _saveDownloadToDevice(jobId);
   }
 
   /// App folder name at root of internal storage (e.g. /storage/emulated/0/FileManager).
   static const String _appDownloadFolderName = 'FileManager';
+
+  static const String _activeJobStorageKey = 'downloader_active_job';
+
+  Future<void> _restoreActiveJobIfAny() async {
+    try {
+      final box = GetStorage();
+      final data = box.read(_activeJobStorageKey);
+      if (data is! Map) return;
+      final jobId = data['job_id']?.toString();
+      if (jobId == null || jobId.isEmpty) return;
+
+      final st = await downloaderService.getStatus(jobId);
+      _jobId = jobId;
+      _jobStatus = st.status;
+
+      if (st.status == 'downloading') {
+        _isDownloading = true;
+        _startSse(jobId: jobId);
+        _startPolling(jobId: jobId);
+      } else if (st.status == 'finished') {
+        await _onJobFinished(jobId);
+      }
+
+      notifyListeners();
+    } catch (_) {
+      // best-effort restore only
+    }
+  }
 
   Future<void> _saveDownloadToDevice(String jobId) async {
     _lastSavedFilePath = null;
@@ -515,4 +665,22 @@ class DownloadProgressVM {
     final gb = mb / 1024.0;
     return '${gb.toStringAsFixed(2)} GB';
   }
+}
+
+@immutable
+class PlaylistItemVM {
+  final VideoInfoModel info;
+  bool selected;
+  VideoQualityModel? selectedQuality;
+
+  PlaylistItemVM({
+    required this.info,
+    this.selected = true,
+    this.selectedQuality,
+  });
+
+  String get id => info.sourceUrl;
+  String get title => info.title ?? 'Untitled';
+  String? get thumbnail => info.thumbnail;
+  List<VideoQualityModel> get qualities => info.formats;
 }

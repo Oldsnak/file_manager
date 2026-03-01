@@ -72,6 +72,24 @@ class DownloaderService {
   }
 
   // -------------------------
+  // API: /download/playlist-info
+  // -------------------------
+  Future<PlaylistInfoModel> getPlaylistInfo(String url) async {
+    final resp = await _client.post(
+      _u('/api/v1/download/playlist-info'),
+      headers: _headers(),
+      body: jsonEncode({'url': url}),
+    );
+
+    if (resp.statusCode != 200) {
+      throw ApiException('Playlist info failed', resp.statusCode, resp.body);
+    }
+
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    return PlaylistInfoModel.fromJson(data);
+  }
+
+  // -------------------------
   // API: /download/start
   // -------------------------
   Future<DownloadStartResult> startDownload({
@@ -346,6 +364,39 @@ class JobStatusResult {
       percent: pct,
       publicUrl: json['public_url']?.toString(),
       error: json['error']?.toString(),
+    );
+  }
+}
+
+class PlaylistInfoModel {
+  final String? title;
+  final String playlistUrl;
+  final List<VideoInfoModel> videos;
+
+  PlaylistInfoModel({
+    required this.playlistUrl,
+    required this.videos,
+    this.title,
+  });
+
+  factory PlaylistInfoModel.fromJson(Map<String, dynamic> json) {
+    final videosJson = json['videos'];
+    final list = <VideoInfoModel>[];
+    if (videosJson is List) {
+      for (final v in videosJson) {
+        if (v is Map<String, dynamic>) {
+          list.add(VideoInfoModel.fromJson(v));
+        } else if (v is Map) {
+          list.add(VideoInfoModel.fromJson(
+              v.map((k, val) => MapEntry(k.toString(), val))));
+        }
+      }
+    }
+
+    return PlaylistInfoModel(
+      title: json['title']?.toString(),
+      playlistUrl: (json['playlist_url'] ?? '').toString(),
+      videos: list,
     );
   }
 }

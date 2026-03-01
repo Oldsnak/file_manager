@@ -11,10 +11,12 @@ class ApiConfig {
 
   static const String _storageKeyBaseUrl = 'video_downloader_base_url';
 
-  /// Default base URL (emulator: 10.0.2.2:8000). Override at runtime for real device.
+  /// Default base URL.
+  /// - Emulator: you can still override via env var.
+  /// - Real device: we default to your LAN IP; you can change it from the UI link icon.
   static const String videoDownloaderBaseUrl = String.fromEnvironment(
     'VIDEO_DOWNLOADER_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000',
+    defaultValue: 'http://192.168.0.107:8000',
   );
 
   /// Base URL used by the app. Reads from storage if set (for real device); otherwise [videoDownloaderBaseUrl].
