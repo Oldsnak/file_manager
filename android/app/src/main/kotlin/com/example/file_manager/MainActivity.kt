@@ -5,11 +5,11 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.ComponentCallbacks2
 import android.os.Build
-import io.flutter.embedding.android.FlutterFragmentActivity
+import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterFragmentActivity() {
+class MainActivity : AudioServiceFragmentActivity() {
 
     private val CHANNEL = "ram_cleaner"
 

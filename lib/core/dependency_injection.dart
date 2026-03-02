@@ -15,6 +15,7 @@ import 'services/file_scan_service.dart';
 import 'services/media_service.dart';
 import 'services/permission_service.dart';
 import 'services/ram_service.dart';
+import 'services/background_audio_service.dart';
 import 'services/secure_vault_service.dart';
 import 'services/storage_stats_service.dart';
 import 'services/vault_auth_service.dart';
@@ -25,6 +26,7 @@ class DependencyInjection {
     Get.put(PermissionService());
     Get.put(StorageStatsService());
     Get.put(MediaService());
+    Get.put(BackgroundAudioService(), permanent: true);
 
     // ✅ MUST be before FileBrowserController (scan depends on it)
     Get.put(FileScanService());

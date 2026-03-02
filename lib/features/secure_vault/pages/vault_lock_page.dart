@@ -8,7 +8,7 @@ import 'package:get/get.dart';
 import 'package:open_filex/open_filex.dart';
 import '../../../core/controllers/vault_controller.dart';
 import '../../../core/models/vault_item.dart';
-
+import '../../../core/services/secure_vault_service.dart';
 
 class VaultLockPage extends StatelessWidget {
   const VaultLockPage({super.key});
@@ -174,7 +174,6 @@ class VaultLockPage extends StatelessWidget {
       return;
     }
 
-    // If file missing (should be cleaned, but just in case)
     if (!File(it.storedPath).existsSync()) {
       Get.snackbar("Vault", "File is missing (deleted from storage?)",
           snackPosition: SnackPosition.BOTTOM);
@@ -182,8 +181,13 @@ class VaultLockPage extends StatelessWidget {
       return;
     }
 
-    // Open for preview
-    await OpenFilex.open(it.storedPath);
+    try {
+      final vault = Get.find<SecureVaultService>();
+      final path = await vault.getDecryptedTempPath(it);
+      await OpenFilex.open(path);
+    } catch (_) {
+      Get.snackbar("Vault", "Can't open file", snackPosition: SnackPosition.BOTTOM);
+    }
   }
 
   // =========================================================

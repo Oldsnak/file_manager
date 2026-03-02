@@ -292,10 +292,10 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
                                       ),
                                     ],
                                   ),
-                              child: IconButton(
-                                onPressed: c.isChecking || c.isFetchingInfo
-                                    ? null
-                                    : () => c.isPlaylistMode
+                                  child: IconButton(
+                                    onPressed: c.isChecking || c.isFetchingInfo
+                                        ? null
+                                        : () => c.isPlaylistMode
                                         ? c.fetchPlaylistInfo()
                                         : c.fetchVideoInfo(),
                                     icon: c.isChecking || c.isFetchingInfo
@@ -348,26 +348,60 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
                               const Text('Select All'),
                             ],
                           ),
+                          if (c.isDownloading && c.selectedPlaylistCount > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: TSizes.sm),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Video ${c.completedPlaylistCount + 1} of ${c.selectedPlaylistCount}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                      color: TColors.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  FilledButton.icon(
+                                    onPressed: () => c.cancelDownload(),
+                                    icon: const Icon(Icons.stop, size: 20),
+                                    label: const Text('Stop'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: Colors.red.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           const SizedBox(height: TSizes.sm),
                           Column(
                             children: c.playlistItems
                                 .map(
                                   (item) => _PlaylistItemCard(
-                                    item: item,
-                                    onToggleSelected: (val) =>
-                                        c.toggleItemSelected(item.id, val),
-                                    onPickQuality: () =>
-                                        _showPlaylistQualityPicker(context, c, item),
-                                  ),
-                                )
+                                item: item,
+                                onToggleSelected: (val) =>
+                                    c.toggleItemSelected(item.id, val),
+                                onPickQuality: () =>
+                                    _showPlaylistQualityPicker(context, c, item),
+                                isCurrentlyDownloading:
+                                c.currentDownloadingSourceUrl == item.id,
+                                isCompleted: c.isPlaylistItemCompleted(item.id),
+                                progressValue: c.currentDownloadingSourceUrl == item.id
+                                    ? c.progressValue
+                                    : null,
+                              ),
+                            )
                                 .toList(),
                           ),
                           const SizedBox(height: TSizes.sm),
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              onPressed:
-                                  c.hasAnySelected ? () => c.startPlaylistDownload() : null,
+                              onPressed: c.hasAnySelected && !c.isDownloading
+                                  ? () => c.startPlaylistDownload()
+                                  : null,
                               icon: const Icon(Icons.download),
                               label: const Text('Download selected'),
                             ),
@@ -444,10 +478,10 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
   }
 
   static void _showPlaylistQualityPicker(
-    BuildContext context,
-    DownloaderController c,
-    PlaylistItemVM item,
-  ) {
+      BuildContext context,
+      DownloaderController c,
+      PlaylistItemVM item,
+      ) {
     final formats = item.qualities;
 
     showModalBottomSheet(
@@ -486,11 +520,17 @@ class _PlaylistItemCard extends StatelessWidget {
   final PlaylistItemVM item;
   final ValueChanged<bool> onToggleSelected;
   final VoidCallback onPickQuality;
+  final bool isCurrentlyDownloading;
+  final bool isCompleted;
+  final double? progressValue;
 
   const _PlaylistItemCard({
     required this.item,
     required this.onToggleSelected,
     required this.onPickQuality,
+    this.isCurrentlyDownloading = false,
+    this.isCompleted = false,
+    this.progressValue,
   });
 
   @override
@@ -535,22 +575,48 @@ class _PlaylistItemCard extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'Quality: $qualityText',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                Text(
-                  'Size: $sizeText',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton(
-                    onPressed: onPickQuality,
-                    child: const Text('Change quality'),
+                if (isCompleted)
+                  Row(
+                    children: [
+                      Icon(Icons.check_circle, size: 18, color: Colors.green.shade700),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Completed',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Colors.green.shade700, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  )
+                else if (isCurrentlyDownloading && progressValue != null) ...[
+                  LinearProgressIndicator(value: progressValue),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${(progressValue! * 100).toStringAsFixed(0)}%',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: TColors.primary, fontWeight: FontWeight.bold),
                   ),
-                ),
+                ] else ...[
+                  Text(
+                    'Quality: $qualityText',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    'Size: $sizeText',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton(
+                      onPressed: onPickQuality,
+                      child: const Text('Change quality'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -567,10 +633,10 @@ class _DownloaderCard extends StatelessWidget {
   final VideoQualityModel? selectedQuality;
   final VoidCallback? onPickQuality;
   final bool isLoading;
-   final bool isDownloading;
-   final double? progressValue;
-   final bool canStartDownload;
-   final VoidCallback? onDownload;
+  final bool isDownloading;
+  final double? progressValue;
+  final bool canStartDownload;
+  final VoidCallback? onDownload;
 
   const _DownloaderCard({
     required this.title,
@@ -671,25 +737,25 @@ class _DownloaderCard extends StatelessWidget {
                                     padding: const EdgeInsets.all(TSizes.sm),
                                     child: isLoading
                                         ? Text(
-                                            "Loading...",
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyLarge
-                                                ?.copyWith(
-                                                  color: TColors.primary,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                          )
+                                      "Loading...",
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.copyWith(
+                                        color: TColors.primary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
                                         : Text(
-                                            sizeText,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyLarge
-                                                ?.copyWith(
-                                                  color: TColors.primary,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                          ),
+                                      sizeText,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.copyWith(
+                                        color: TColors.primary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 Expanded(
@@ -751,10 +817,10 @@ class _DownloaderCard extends StatelessWidget {
                 onPressed: canStartDownload && !isDownloading ? onDownload : null,
                 icon: isDownloading
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
                     : const Icon(Icons.download),
                 label: const Text('Download'),
               ),

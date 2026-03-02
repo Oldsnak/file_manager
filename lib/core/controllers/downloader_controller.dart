@@ -27,9 +27,7 @@ class DownloaderController extends ChangeNotifier {
   DownloaderController({
     required this.downloaderService,
     required this.socialDetector,
-  }) {
-    _restoreActiveJobIfAny();
-  }
+  });
 
   // -----------------------
   // State
@@ -62,6 +60,11 @@ class DownloaderController extends ChangeNotifier {
 
   bool _isPlaylistMode = false;
   final List<PlaylistItemVM> _playlistItems = [];
+  bool _cancelRequested = false;
+  String? _currentDownloadingSourceUrl;
+  final Set<String> _completedPlaylistSourceUrls = {};
+  int _completedPlaylistCount = 0;
+  bool _playlistDownloadCompleted = false;
 
   // -----------------------
   // Getters for UI
@@ -108,6 +111,12 @@ class DownloaderController extends ChangeNotifier {
   bool get areAllSelected =>
       _playlistItems.isNotEmpty && _playlistItems.every((it) => it.selected);
   bool get hasAnySelected => _playlistItems.any((it) => it.selected);
+
+  int get selectedPlaylistCount => _playlistItems.where((it) => it.selected).length;
+  int get completedPlaylistCount => _completedPlaylistCount;
+  String? get currentDownloadingSourceUrl => _currentDownloadingSourceUrl;
+  bool get playlistDownloadCompleted => _playlistDownloadCompleted;
+  bool isPlaylistItemCompleted(String sourceUrl) => _completedPlaylistSourceUrls.contains(sourceUrl);
 
   /// Call after showing [lastSavedFilePath] or [lastSaveError] in UI so it is not shown again.
   void clearLastSaveResult() {
@@ -272,14 +281,52 @@ class DownloaderController extends ChangeNotifier {
     }
 
     _clearError();
+    _cancelRequested = false;
+    _completedPlaylistCount = 0;
+    _completedPlaylistSourceUrls.clear();
+    _playlistDownloadCompleted = false;
+    _currentDownloadingSourceUrl = null;
+    notifyListeners();
 
-    // Sequentially start backend jobs for selected videos.
-    for (final item in _playlistItems.where((it) => it.selected)) {
+    final selected = _playlistItems.where((it) => it.selected).toList();
+    for (final item in selected) {
+      if (_cancelRequested) break;
+
+      _currentDownloadingSourceUrl = item.id;
       _videoInfo = item.info;
       _selectedQuality = item.selectedQuality ?? item.info.bestQuality;
       if (_videoInfo == null || _selectedQuality == null) continue;
+
       await startDownload();
+
+      while (_isDownloading && !_cancelRequested) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      if (_cancelRequested) break;
+
+      _completedPlaylistSourceUrls.add(item.id);
+      _completedPlaylistCount++;
+      notifyListeners();
     }
+
+    _currentDownloadingSourceUrl = null;
+    _playlistDownloadCompleted = true;
+    notifyListeners();
+  }
+
+  void cancelDownload() {
+    _cancelRequested = true;
+    _sseSub?.cancel();
+    _sseSub = null;
+    _stopPolling();
+    try {
+      GetStorage().remove(_activeJobStorageKey);
+    } catch (_) {}
+    _isDownloading = false;
+    _jobId = null;
+    _jobStatus = null;
+    _progress = null;
+    notifyListeners();
   }
 
   /// Call this when user presses final download button.

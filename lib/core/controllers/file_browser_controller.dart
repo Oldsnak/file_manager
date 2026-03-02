@@ -4,6 +4,10 @@ import 'package:get/get.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../features/file_browser/pages/file_scan_page.dart';
+import '../../features/file_browser/pages/in_app_audio_player_page.dart';
+import '../../features/file_browser/pages/in_app_image_viewer_page.dart';
+import '../../features/file_browser/pages/in_app_pdf_viewer_page.dart';
+import '../../features/file_browser/pages/in_app_video_player_page.dart';
 import '../../features/secure_vault/pages/vault_entry_page.dart';
 import '../models/browser_item.dart';
 import '../services/media_service.dart';
@@ -290,7 +294,29 @@ class FileBrowserController extends GetxController {
     }
     if (item.path.isEmpty) return;
 
-    // for both sources, open by file path
+    final isPdf = item.name.toLowerCase().endsWith('.pdf') ||
+        (item.mimeType.isNotEmpty && item.mimeType.toLowerCase().contains('pdf'));
+
+    if (item.isVideo) {
+      final playlist = items.where((i) => i.isVideo && i.path.isNotEmpty).toList();
+      Get.to(() => InAppVideoPlayerPage(initialItem: item, playlist: playlist));
+      return;
+    }
+    if (item.isAudio) {
+      final playlist = items.where((i) => i.isAudio && i.path.isNotEmpty).toList();
+      Get.to(() => InAppAudioPlayerPage(initialItem: item, playlist: playlist));
+      return;
+    }
+    if (item.isImage) {
+      final playlist = items.where((i) => i.isImage && i.path.isNotEmpty).toList();
+      Get.to(() => InAppImageViewerPage(initialItem: item, playlist: playlist));
+      return;
+    }
+    if (isPdf) {
+      Get.to(() => InAppPdfViewerPage(item: item));
+      return;
+    }
+
     await _scanService.openFile(item.path);
   }
 
@@ -346,23 +372,27 @@ class FileBrowserController extends GetxController {
 
   /// Single item to vault (used by actions sheet)
   Future<bool> moveToSecureVault(BrowserItem item) async {
-    if (item.path.isEmpty) return false;
+    if (item.isFromGallery) {
+      if (item.id.isEmpty) return false;
+    } else {
+      if (item.path.isEmpty) return false;
+    }
 
-    // Ensure vault is setup/unlocked
-    final ok = await Get.to<bool>(() => const VaultEntryPage());
+    final ok = await Get.to<bool>(() => VaultEntryPage(returnToCaller: true));
     if (ok != true) return false;
 
     try {
-      await _vault.lockFile(item.path);
-
-      // Remove original
       if (item.isFromGallery) {
-        // deleting removes from MediaStore (privacy)
-        final deleted = await _mediaService.deleteMediaByIds([item.id]);
-        if (!deleted) return false;
+        final bytes = await _mediaService.getFileBytes(item.id);
+        if (bytes == null || bytes.isEmpty) return false;
+        await _vault.lockFileFromBytes(
+          bytes: bytes,
+          suggestedName: item.name,
+          originalPath: item.path.isNotEmpty ? item.path : null,
+        );
+        await _mediaService.deleteMediaByIds([item.id]);
       } else {
-        final deleted = await _scanService.deleteFile(item.path);
-        if (!deleted) return false;
+        await _vault.lockFile(item.path);
       }
 
       items.removeWhere((x) => x.id == item.id);
@@ -375,41 +405,36 @@ class FileBrowserController extends GetxController {
     }
   }
 
-  /// Multi selected items to vault (if you add "Move selected to secure" later)
+  /// Multi selected items to vault
   Future<int> moveSelectedToSecureVault() async {
     if (selectedIds.isEmpty) return 0;
 
-    // Ensure vault is setup/unlocked
-    final ok = await Get.to<bool>(() => const VaultEntryPage());
+    final ok = await Get.to<bool>(() => VaultEntryPage(returnToCaller: true));
     if (ok != true) return 0;
 
     int moved = 0;
-
-    // Work on a snapshot so removing from items won't break loop
     final selectedItems = items.where((x) => selectedIds.contains(x.id)).toList();
 
     for (final it in selectedItems) {
-      if (it.path.isEmpty) continue;
-
       try {
-        await _vault.lockFile(it.path);
-
-        // Remove original
-        bool removed = false;
         if (it.isFromGallery) {
-          removed = await _mediaService.deleteMediaByIds([it.id]);
+          if (it.id.isEmpty) continue;
+          final bytes = await _mediaService.getFileBytes(it.id);
+          if (bytes == null || bytes.isEmpty) continue;
+          await _vault.lockFileFromBytes(
+            bytes: bytes,
+            suggestedName: it.name,
+            originalPath: it.path.isNotEmpty ? it.path : null,
+          );
+          await _mediaService.deleteMediaByIds([it.id]);
         } else {
-          removed = await _scanService.deleteFile(it.path);
+          if (it.path.isEmpty) continue;
+          await _vault.lockFile(it.path);
         }
-
-        if (removed) {
-          moved++;
-          items.removeWhere((x) => x.id == it.id);
-          selectedIds.remove(it.id);
-        }
-      } catch (_) {
-        // ignore individual failures
-      }
+        moved++;
+        items.removeWhere((x) => x.id == it.id);
+        selectedIds.remove(it.id);
+      } catch (_) {}
     }
 
     if (selectedIds.isEmpty) selectionMode.value = false;

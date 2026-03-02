@@ -10,13 +10,14 @@ import '../../../core/services/vault_auth_service.dart';
 /// - If PIN not set => Setup PIN (and optional biometrics toggle)
 /// - If PIN set => Unlock with PIN or biometrics (if enabled)
 ///
-/// Navigation:
-/// After successful unlock, it navigates to route: "/secure-vault"
-/// Make sure you register this route in GetMaterialApp.
+/// If [returnToCaller] is true (e.g. when moving a file to vault from file browser),
+/// on success pops with true so the caller can continue. If false, navigates to VaultHomePage.
 class VaultEntryPage extends StatefulWidget {
-  const VaultEntryPage({super.key});
+  const VaultEntryPage({super.key, this.returnToCaller = false});
 
   static const String routeName = "/vault-entry";
+
+  final bool returnToCaller;
 
   @override
   State<VaultEntryPage> createState() => _VaultEntryPageState();
@@ -198,7 +199,10 @@ class _VaultEntryPageState extends State<VaultEntryPage> {
   }
 
   void _goToVaultHome() {
-    // IndexedStack ke andar ho → direct navigate
+    if (widget.returnToCaller) {
+      Get.back(result: true);
+      return;
+    }
     Get.offAll(
           () => const VaultHomePage(),
       transition: Transition.fadeIn,

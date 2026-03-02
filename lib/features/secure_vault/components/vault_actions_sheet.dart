@@ -1,10 +1,10 @@
 // lib/features/secure_vault/widgets/vault_actions_sheet.dart
-import 'dart:io';
-
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:open_filex/open_filex.dart';
 import '../../../core/models/vault_item.dart';
+import '../../../core/services/secure_vault_service.dart';
 import '../../../foundation/constants/colors.dart';
 import '../../../foundation/constants/sizes.dart';
 import '../../../foundation/helpers/helper_functions.dart';
@@ -161,21 +161,11 @@ void showVaultActionsSheet(
 
 Future<void> _openVaultFile(VaultItem item) async {
   try {
-    final f = File(item.storedPath);
-    if (!await f.exists()) {
-      THelperFunctions.showSnackBar("File not found");
-      return;
-    }
-
-    // Using your existing open_filex dependency.
-    // We keep it simple: open by OS registered apps.
-    // (No extra service needed; but you can route via a service later.)
+    final vault = Get.find<SecureVaultService>();
+    final path = await vault.getDecryptedTempPath(item);
     // ignore: depend_on_referenced_packages
-    final result = await OpenFilex.open(item.storedPath);
+    final result = await OpenFilex.open(path);
     if (result.type != ResultType.done) {
-      // Some devices return "noAppToOpen"
-      // ignore it but show message
-      // result.message can be empty sometimes
       THelperFunctions.showSnackBar("Can't open file");
     }
   } catch (_) {
@@ -215,10 +205,19 @@ Future<void> _confirmAndUnlock(BuildContext context, VaultController c, VaultIte
 
   if (ok != true) return;
 
-  final restored = await c.unlockItem(item);
+  String? restoreDir;
+  if (item.originalPath == null || item.originalPath!.trim().isEmpty) {
+    restoreDir = await FilePicker.platform.getDirectoryPath();
+    if (restoreDir == null || restoreDir.trim().isEmpty) {
+      THelperFunctions.showSnackBar("Restore folder not selected");
+      return;
+    }
+  }
+
+  final restored = await c.unlockItem(item, restoreDirectory: restoreDir);
 
   if (restored != null && restored.isNotEmpty) {
-    THelperFunctions.showSnackBar("Unlocked");
+    THelperFunctions.showSnackBar("Restored to original location");
   } else {
     THelperFunctions.showSnackBar("Unlock failed");
   }

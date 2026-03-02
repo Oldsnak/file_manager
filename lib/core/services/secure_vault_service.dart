@@ -2,37 +2,52 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/vault_item.dart';
 
+const int _kEncryptedVersion = 0x01;
+const String _kVaultKeyStorageKey = 'vault_aes_key_v1';
+
 class SecureVaultService {
-  // =========================================================
-  // METADATA (GetStorage)
-  // =========================================================
   static const String _boxName = "secure_vault_box";
   static const String _itemsKey = "vault_items_v1";
 
   late final GetStorage _box;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  List<int>? _vaultKey;
 
-  // =========================================================
-  // VAULT DIRECTORY
-  // =========================================================
   static const String _vaultDirName = "SecureVault";
 
-  /// Init must be called once in DependencyInjection before controllers.
   Future<void> init() async {
     await GetStorage.init(_boxName);
     _box = GetStorage(_boxName);
     await _ensureVaultDir();
+    await _ensureEncryptionKey();
   }
 
-  /// Internal app-only directory:
-  /// - Android: /data/user/0/<pkg>/app_flutter/SecureVault
-  /// - iOS: .../Documents/SecureVault
+  Future<void> _ensureEncryptionKey() async {
+    if (_vaultKey != null) return;
+    final existing = await _secureStorage.read(key: _kVaultKeyStorageKey);
+    if (existing != null && existing.isNotEmpty) {
+      _vaultKey = base64Url.decode(existing);
+      if (_vaultKey != null && _vaultKey!.length == 32) return;
+    }
+    final random = Random.secure();
+    _vaultKey = List<int>.generate(32, (_) => random.nextInt(256));
+    await _secureStorage.write(
+      key: _kVaultKeyStorageKey,
+      value: base64Url.encode(_vaultKey!),
+    );
+  }
+
   Future<Directory> _vaultDir() async {
     final base = await getApplicationDocumentsDirectory();
     return Directory("${base.path}/$_vaultDirName");
@@ -45,43 +60,25 @@ class SecureVaultService {
     }
   }
 
-  // =========================================================
-  // ✅ OPTIONAL: CLEAR ALL (used by Auth reset / logout flows)
-  // (Does not affect existing features unless you call it)
-  // =========================================================
-
-  /// Clear metadata + delete all files inside vault directory.
-  /// Use carefully (example: when user resets vault PIN).
   Future<void> clearAllVaultData() async {
-    // Clear metadata
     try {
       await _box.remove(_itemsKey);
     } catch (_) {}
-
-    // Delete all vault files
     try {
       final dir = await _vaultDir();
       if (dir.existsSync()) {
         await dir.delete(recursive: true);
       }
     } catch (_) {}
-
-    // Recreate dir
     await _ensureVaultDir();
   }
-
-  // =========================================================
-  // METADATA
-  // =========================================================
 
   List<VaultItem> loadItems() {
     final raw = _box.read(_itemsKey);
     if (raw == null) return [];
-
     try {
       final decoded = jsonDecode(raw.toString());
       if (decoded is! List) return [];
-
       return decoded
           .whereType<Map>()
           .map((m) => VaultItem.fromJson(Map<String, dynamic>.from(m)))
@@ -96,17 +93,10 @@ class SecureVaultService {
     await _box.write(_itemsKey, jsonEncode(list));
   }
 
-  // =========================================================
-  // LIST / REFRESH
-  // =========================================================
-
-  /// Load from metadata and also drop broken entries (deleted files)
   Future<List<VaultItem>> getVaultItemsCleaned() async {
     final items = loadItems();
     if (items.isEmpty) return [];
-
     final cleaned = <VaultItem>[];
-
     for (final it in items) {
       if (it.storedPath.isEmpty) continue;
       final f = File(it.storedPath);
@@ -114,23 +104,62 @@ class SecureVaultService {
         cleaned.add(it);
       }
     }
-
     if (cleaned.length != items.length) {
       await saveItems(cleaned);
     }
     return cleaned;
   }
 
-  // =========================================================
-  // LOCK / UNLOCK
-  // =========================================================
+  Future<List<int>> _encryptBytes(List<int> plainBytes) async {
+    await _ensureEncryptionKey();
+    final key = SecretKey(_vaultKey!);
+    final algorithm = AesGcm.with256bits();
+    final secretBox = await algorithm.encrypt(
+      plainBytes,
+      secretKey: key,
+    );
+    final concat = secretBox.concatenation();
+    return <int>[_kEncryptedVersion, ...concat];
+  }
 
-  /// Lock a file by moving it into app private directory (vault).
-  /// This removes it from public storage so it won't appear in Gallery/Files apps.
-  ///
-  /// Returns created VaultItem.
+  Future<List<int>> _decryptBytes(List<int> encryptedBytes) async {
+    await _ensureEncryptionKey();
+    final algorithm = AesGcm.with256bits();
+    if (encryptedBytes.length <= 1 + algorithm.nonceLength + algorithm.macAlgorithm.macLength) {
+      throw Exception("Invalid encrypted payload");
+    }
+    final payload = encryptedBytes.sublist(1);
+    final secretBox = SecretBox.fromConcatenation(
+      payload,
+      nonceLength: algorithm.nonceLength,
+      macLength: algorithm.macAlgorithm.macLength,
+    );
+    final key = SecretKey(_vaultKey!);
+    return await algorithm.decrypt(secretBox, secretKey: key);
+  }
+
+  bool _isEncryptedVaultFile(List<int> bytes) {
+    return bytes.isNotEmpty && bytes.first == _kEncryptedVersion;
+  }
+
+  Future<String> getDecryptedTempPath(VaultItem item) async {
+    final src = File(item.storedPath);
+    if (!await src.exists()) throw Exception("Vault file missing");
+    final bytes = await src.readAsBytes();
+    final dir = await getTemporaryDirectory();
+    final tempPath = "${dir.path}/vault_preview_${DateTime.now().millisecondsSinceEpoch}_${item.name}";
+    if (_isEncryptedVaultFile(bytes)) {
+      final decrypted = await _decryptBytes(bytes);
+      await File(tempPath).writeAsBytes(decrypted);
+    } else {
+      await src.copy(tempPath);
+    }
+    return tempPath;
+  }
+
   Future<VaultItem> lockFile(String originalPath) async {
     await _ensureVaultDir();
+    await _ensureEncryptionKey();
 
     final src = File(originalPath);
     if (!await src.exists()) {
@@ -138,31 +167,30 @@ class SecureVaultService {
     }
 
     final dir = await _vaultDir();
-
-    // ✅ FIX: baseName already contains extension in most cases (e.g. "photo.jpg")
-    // We should NOT append ext twice.
-    final baseName = VaultItem.basename(originalPath); // might be "file.pdf"
-    final safeFullName = _safeFileName(baseName); // keep ext inside name
-
-    // Unique name to avoid collisions
+    final baseName = VaultItem.basename(originalPath);
+    final safeFullName = _safeFileName(baseName);
     final stamp = DateTime.now().millisecondsSinceEpoch;
     final destPath = "${dir.path}/$stamp-$safeFullName";
 
-    // Move file (rename is fastest, but may fail across storage volumes)
-    File moved;
+    final bytes = await src.readAsBytes();
+    final encrypted = await _encryptBytes(bytes);
+    final destFile = File(destPath);
+    await destFile.writeAsBytes(encrypted);
+
     try {
-      moved = await src.rename(destPath);
-    } catch (_) {
-      // fallback copy+delete
-      moved = await src.copy(destPath);
       await src.delete();
+    } catch (e) {
+      try {
+        await destFile.delete();
+      } catch (_) {}
+      throw Exception("Could not remove file from original location: $e");
     }
 
-    final stat = await moved.stat();
+    final stat = await destFile.stat();
     final item = VaultItem(
-      id: moved.path,
-      name: VaultItem.basename(moved.path),
-      storedPath: moved.path,
+      id: destPath,
+      name: VaultItem.basename(destPath),
+      storedPath: destPath,
       originalPath: originalPath,
       sizeBytes: stat.size,
       modified: stat.modified,
@@ -170,18 +198,48 @@ class SecureVaultService {
     );
 
     final current = loadItems();
-
-    // ✅ avoid duplicates if same file gets locked again somehow
     current.removeWhere((x) => x.storedPath == item.storedPath || x.originalPath == originalPath);
-
     current.insert(0, item);
     await saveItems(current);
 
     return item;
   }
 
-  /// Unlock (restore) the file back to its original path if possible.
-  /// If originalPath is missing, you must pass a restoreDirectory.
+  Future<VaultItem> lockFileFromBytes({
+    required List<int> bytes,
+    required String suggestedName,
+    String? originalPath,
+  }) async {
+    await _ensureVaultDir();
+    await _ensureEncryptionKey();
+
+    final dir = await _vaultDir();
+    final safeFullName = _safeFileName(suggestedName);
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final destPath = "${dir.path}/$stamp-$safeFullName";
+
+    final encrypted = await _encryptBytes(bytes);
+    final destFile = File(destPath);
+    await destFile.writeAsBytes(encrypted);
+
+    final stat = await destFile.stat();
+    final item = VaultItem(
+      id: destPath,
+      name: VaultItem.basename(destPath),
+      storedPath: destPath,
+      originalPath: originalPath ?? '',
+      sizeBytes: stat.size,
+      modified: stat.modified,
+      type: VaultItem.detectType(suggestedName),
+    );
+
+    final current = loadItems();
+    current.insert(0, item);
+    await saveItems(current);
+
+    return item;
+  }
+
   Future<String> unlockFile(
       VaultItem item, {
         String? restoreDirectory,
@@ -189,45 +247,51 @@ class SecureVaultService {
     final src = File(item.storedPath);
     if (!await src.exists()) throw Exception("Vault file missing");
 
-    // decide destination
     String destPath;
-    if (item.originalPath != null && item.originalPath!.isNotEmpty) {
-      destPath = item.originalPath!;
+    if (item.originalPath != null && item.originalPath!.trim().isNotEmpty) {
+      destPath = _normalizePath(item.originalPath!);
     } else {
-      if (restoreDirectory == null || restoreDirectory.isEmpty) {
+      if (restoreDirectory == null || restoreDirectory.trim().isEmpty) {
         throw Exception("No restore directory provided");
       }
-      destPath = "$restoreDirectory/${item.name}";
+      destPath = path.join(restoreDirectory.trim(), item.name);
     }
 
-    // ensure parent directory exists
-    final parent = Directory(_parentDir(destPath));
-    if (!parent.existsSync()) {
-      await parent.create(recursive: true);
-    }
+    await _ensureParentDirsExist(destPath);
 
-    // if exists, make unique
     destPath = await _avoidOverwrite(destPath);
 
-    File restored;
-    try {
-      restored = await src.rename(destPath);
-    } catch (_) {
-      restored = await src.copy(destPath);
-      await src.delete();
+    final bytes = await src.readAsBytes();
+
+    if (_isEncryptedVaultFile(bytes)) {
+      final decrypted = await _decryptBytes(bytes);
+      await File(destPath).writeAsBytes(decrypted);
+    } else {
+      await src.copy(destPath);
     }
 
-    // remove from metadata
+    await src.delete();
     final current = loadItems();
     current.removeWhere((x) => x.id == item.id || x.storedPath == item.storedPath);
     await saveItems(current);
 
-    return restored.path;
+    return destPath;
   }
 
-  // =========================================================
-  // DELETE
-  // =========================================================
+  String _normalizePath(String p) {
+    final unified = p.replaceAll("\\", "/");
+    return path.normalize(unified);
+  }
+
+  Future<void> _ensureParentDirsExist(String filePath) async {
+    final dirPath = path.dirname(filePath);
+    if (dirPath.isEmpty || dirPath == "." || dirPath == "..") return;
+
+    final dir = Directory(dirPath);
+    if (await dir.exists()) return;
+
+    await dir.create(recursive: true);
+  }
 
   Future<void> deleteVaultItem(VaultItem item) async {
     final f = File(item.storedPath);
@@ -250,31 +314,17 @@ class SecureVaultService {
     return count;
   }
 
-  // =========================================================
-  // HELPERS
-  // =========================================================
-
-  /// Extract extension including dot (".pdf") from a path.
-  /// (Still used for unlock naming / overwrite logic, keep it.)
-  String _extension(String path) {
-    final p = path.replaceAll("\\", "/");
+  String _extension(String pathStr) {
+    final p = pathStr.replaceAll("\\", "/");
     final name = p.split("/").last;
     final dot = name.lastIndexOf(".");
     if (dot < 0) return "";
-    return name.substring(dot); // includes dot
+    return name.substring(dot);
   }
 
   String _safeFileName(String name) {
-    // Keep it simple for filesystem safety
     final cleaned = name.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), "_");
     return cleaned.trim().isEmpty ? "file" : cleaned.trim();
-  }
-
-  String _parentDir(String path) {
-    final norm = path.replaceAll("\\", "/");
-    final idx = norm.lastIndexOf("/");
-    if (idx <= 0) return "/";
-    return norm.substring(0, idx);
   }
 
   Future<String> _avoidOverwrite(String destPath) async {

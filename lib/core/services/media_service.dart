@@ -167,6 +167,19 @@ class MediaService {
     return a.thumbnailDataWithSize(ThumbnailSize(size, size));
   }
 
+  /// Get full file bytes for an asset (e.g. before moving to vault).
+  Future<List<int>?> getFileBytes(String assetId) async {
+    final AssetEntity? a = await AssetEntity.fromId(assetId);
+    if (a == null) return null;
+    final File? file = await a.file;
+    if (file == null || !await file.exists()) return null;
+    try {
+      return await file.readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Optional helper if you ever want to clear caches manually
   void clearCache() {
     _albumsCache.clear();
