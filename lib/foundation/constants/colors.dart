@@ -4,22 +4,22 @@ class TColors {
   TColors._();
 
   // 🌿 App Basic Colors
-  static const Color primary = Color(0xFF2AB39F);     // Premium medical teal
-  static const Color secondary = Color(0xFFFFC857);   // Warm accent (appointment highlight)
-  static const Color optional = Color(0xFF4C9EEB);    // Calm medical blue (optional accent)
+  static const Color primary = Color(0xFF2AB39F);
+  static const Color secondary = Color(0xFFFFC857);
+  static const Color optional = Color(0xFF4C9EEB);
 
   // 🖋️ Text Colors
-  static const Color textPrimary = Color(0xFF1A1A1A);   // Dark bold text
-  static const Color textSecondary = Color(0xFF5A5A5A); // Labels, subtitles
-  static const Color textWhite = Color(0xFFFFFFFF);     // White text
+  static const Color textPrimary = Color(0xFF1A1A1A);
+  static const Color textSecondary = Color(0xFF5A5A5A);
+  static const Color textWhite = Color(0xFFFFFFFF);
 
 
   // 🌑 Dark Mode Placeholder (for later dark theme)
-  static const Color light = Color(0xFFFDFDFB); // Soft white
+  static const Color light = Color(0xFFFDFDFB);
   static const Color dark = Color(0xFF1E1E1E);
-  static const Color darkPrimary = Color(0xFF81E6D9);     // Teal glow
-  static const Color darkSecondary = Color(0xFFFFD479);   // Softer amber
-  static const Color darkOptional = Color(0xFF76B5FF);    // Soft blue
+  static const Color darkPrimary = Color(0xFF81E6D9);
+  static const Color darkSecondary = Color(0xFFFFD479);
+  static const Color darkOptional = Color(0xFF76B5FF);
 
 
   // 🪴 Background Colors
@@ -46,23 +46,23 @@ class TColors {
 
   // 🧺 Container Backgrounds
   static const Color lightContainer = Color(0xFFFFFFFF);
-  static const Color lightPrimaryContainer = Color(0xFFE6F5F2);   // soft teal
-  static const Color lightSecondaryContainer = Color(0xFFFFF3D6); // soft amber
-  static const Color lightOptionalContainer = Color(0xFFE8F2FF);  // soft blue
+  static const Color lightPrimaryContainer = Color(0xFFE6F5F2);
+  static const Color lightSecondaryContainer = Color(0xFFFFF3D6);
+  static const Color lightOptionalContainer = Color(0xFFE8F2FF);
   static const Color darkContainer = Color(0xFF2B2B2B);
-  static const Color darkPrimaryContainer = Color(0xFF1F3A37);     // teal overlay
-  static const Color darkSecondaryContainer = Color(0xFF3A2F17);   // amber overlay
-  static const Color darkOptionalContainer = Color(0xFF1A2C45);    // blue overlay
+  static const Color darkPrimaryContainer = Color(0xFF1F3A37);
+  static const Color darkSecondaryContainer = Color(0xFF3A2F17);
+  static const Color darkOptionalContainer = Color(0xFF1A2C45);
 
 
   // 🔘 Button Colors
   static const Color buttonPrimary = primary;
   static const Color buttonSecondary = secondary;
-  static const Color buttonDisabled = Color(0xFFBFBFBF); // greyed out
+  static const Color buttonDisabled = Color(0xFFBFBFBF);
 
 
   // 📏 Border Colors
-  static const Color borderPrimary = Color(0xFF2AB39F);  // teal border
+  static const Color borderPrimary = Color(0xFF2AB39F);
   static const Color borderSecondary = Color(0xFFFFC857);
 
   // ⚠️ Status Colors

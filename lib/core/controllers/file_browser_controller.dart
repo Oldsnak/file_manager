@@ -334,6 +334,23 @@ class FileBrowserController extends GetxController {
     if (selectedIds.isEmpty) selectionMode.value = false;
   }
 
+  /// Rename a file (scan mode only). Returns true if renamed, false otherwise.
+  Future<bool> renameItem(BrowserItem item, String newName) async {
+    if (_source != _SourceType.scan) return false;
+    if (item.path.isEmpty || newName.trim().isEmpty) return false;
+    final newPath = await _scanService.renameFile(item.path, newName.trim());
+    if (newPath == null) return false;
+    final idx = items.indexWhere((x) => x.id == item.id);
+    if (idx >= 0) {
+      items[idx] = item.copyWith(
+        id: newPath,
+        name: newName.trim(),
+        path: newPath,
+      );
+    }
+    return true;
+  }
+
   Future<void> deleteSelected() async {
     if (selectedIds.isEmpty) return;
 

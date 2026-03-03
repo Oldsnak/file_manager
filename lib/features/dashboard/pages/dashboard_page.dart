@@ -39,7 +39,7 @@ class Dashboard extends StatelessWidget {
                       child: Column(
                         children: [
                           // -- Heading
-                          SectionHeading(title: 'Main Folders', showActionButton: false, textColor: dark ? Colors.black : Colors.white,),
+                          SectionHeading(title: 'Main Folders', showActionButton: false, textColor: Colors.black),
                           SizedBox(height: TSizes.spaceBtwItems/2,),
 
                           // Categories
@@ -47,7 +47,7 @@ class Dashboard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    SizedBox(height: TSizes.spaceBtwSections,)
+                    SizedBox(height: TSizes.spaceBtwSections*1.2,)
                   ],
                 )
               ),

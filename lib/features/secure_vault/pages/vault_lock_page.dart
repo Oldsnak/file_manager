@@ -281,33 +281,20 @@ class VaultLockPage extends StatelessWidget {
 
     if (selected.isEmpty) return;
 
-    // We might need restore directory for some items:
-    // - originalPath is null/empty
-    // - OR original directory doesn't exist (optional safety)
-    bool needsDir = selected.any((it) {
-      final op = it.originalPath ?? "";
-      if (op.trim().isEmpty) return true;
-      final parent = _parentDir(op);
-      return parent.trim().isEmpty;
-    });
-
-    String? restoreDir;
-
-    if (needsDir) {
-      restoreDir = await FilePicker.platform.getDirectoryPath();
-      if (restoreDir == null || restoreDir.trim().isEmpty) {
-        Get.snackbar("Vault", "Restore folder not selected",
-            snackPosition: SnackPosition.BOTTOM);
-        return;
-      }
+    final restoreDir = await FilePicker.platform.getDirectoryPath();
+    if (restoreDir == null || restoreDir.trim().isEmpty) {
+      Get.snackbar("Vault", "Restore folder not selected",
+          snackPosition: SnackPosition.BOTTOM);
+      return;
     }
 
-    // confirm
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Unlock files?"),
-        content: Text("Restore ${selected.length} item(s) back to storage?"),
+        content: Text(
+          "Restore ${selected.length} item(s) to the chosen folder?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -324,12 +311,8 @@ class VaultLockPage extends StatelessWidget {
     if (ok != true) return;
 
     int success = 0;
-
     for (final it in selected) {
-      final op = it.originalPath ?? "";
-      final String? dirToUse =
-      op.trim().isEmpty ? restoreDir : restoreDir; // allow dir even if op exists
-      final restored = await _c.unlockItem(it, restoreDirectory: dirToUse);
+      final restored = await _c.unlockItem(it, restoreDirectory: restoreDir);
       if (restored != null && restored.isNotEmpty) success++;
     }
 

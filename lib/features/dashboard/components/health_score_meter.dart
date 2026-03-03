@@ -100,7 +100,7 @@ class HealthScoreMeter extends StatelessWidget {
                 // ✔ Center knob circle
                 knobStyle: KnobStyle(
                   color: TColors.buttonPrimary,
-                  borderColor: dark ? TColors.darkContainer : TColors.buttonDisabled,
+                  borderColor: dark ? TColors.darkContainer : TColors.darkPrimary,
                   borderWidth: 0.01
                 ),
               ),

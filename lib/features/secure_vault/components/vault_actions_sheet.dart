@@ -10,6 +10,7 @@ import '../../../foundation/constants/sizes.dart';
 import '../../../foundation/helpers/helper_functions.dart';
 
 import '../../../core/controllers/vault_controller.dart';
+import '../vault_opener.dart';
 
 void showVaultActionsSheet(
     BuildContext context,
@@ -87,7 +88,7 @@ void showVaultActionsSheet(
 
               Divider(height: 1, color: dividerColor),
 
-              // ---------- OPEN ----------
+              // ---------- OPEN (in-app viewer for video/image/audio/PDF) ----------
               _ActionTile(
                 icon: _openIconForType(item.type),
                 iconColor: accent,
@@ -95,7 +96,7 @@ void showVaultActionsSheet(
                 textColor: textColor,
                 onTap: () {
                   Navigator.pop(context);
-                  _openVaultFile(item);
+                  _openVaultItem(context, item);
                 },
               ),
 
@@ -159,7 +160,15 @@ void showVaultActionsSheet(
 // HELPERS
 // =============================================================
 
-Future<void> _openVaultFile(VaultItem item) async {
+Future<void> _openVaultItem(BuildContext context, VaultItem item) async {
+  final useInApp = item.isVideo ||
+      item.isImage ||
+      item.isAudio ||
+      (item.type == VaultItemType.document && item.name.toLowerCase().endsWith('.pdf'));
+  if (useInApp) {
+    await openVaultItemInApp(context, item);
+    return;
+  }
   try {
     final vault = Get.find<SecureVaultService>();
     final path = await vault.getDecryptedTempPath(item);
@@ -182,11 +191,11 @@ Future<void> _confirmAndUnlock(BuildContext context, VaultController c, VaultIte
       return AlertDialog(
         backgroundColor: dark ? TColors.darkContainer : TColors.lightContainer,
         title: Text(
-          "Unlock file?",
+          "Unlock / Restore",
           style: TextStyle(color: dark ? TColors.textWhite : TColors.textPrimary),
         ),
         content: Text(
-          "This will restore the file back to its original location (if available).",
+          "Choose a folder where the file will be restored. The file will be saved there and removed from the Secure Folder.",
           style: TextStyle(color: dark ? TColors.textWhite : TColors.textSecondary),
         ),
         actions: [
@@ -196,7 +205,7 @@ Future<void> _confirmAndUnlock(BuildContext context, VaultController c, VaultIte
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Unlock"),
+            child: const Text("Choose folder"),
           ),
         ],
       );
@@ -205,21 +214,18 @@ Future<void> _confirmAndUnlock(BuildContext context, VaultController c, VaultIte
 
   if (ok != true) return;
 
-  String? restoreDir;
-  if (item.originalPath == null || item.originalPath!.trim().isEmpty) {
-    restoreDir = await FilePicker.platform.getDirectoryPath();
-    if (restoreDir == null || restoreDir.trim().isEmpty) {
-      THelperFunctions.showSnackBar("Restore folder not selected");
-      return;
-    }
+  final restoreDir = await FilePicker.platform.getDirectoryPath();
+  if (restoreDir == null || restoreDir.trim().isEmpty) {
+    THelperFunctions.showSnackBar("Restore folder not selected");
+    return;
   }
 
   final restored = await c.unlockItem(item, restoreDirectory: restoreDir);
 
   if (restored != null && restored.isNotEmpty) {
-    THelperFunctions.showSnackBar("Restored to original location");
+    THelperFunctions.showSnackBar("Restored to: $restored");
   } else {
-    THelperFunctions.showSnackBar("Unlock failed");
+    THelperFunctions.showSnackBar("Unlock failed. Check storage permission.");
   }
 }
 

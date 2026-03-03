@@ -164,11 +164,11 @@ class VaultController extends GetxController {
   // UNLOCK / DELETE
   // =========================================================
 
-  Future<String?> unlockItem(VaultItem item, {String? restoreDirectory}) async {
+  Future<String?> unlockItem(VaultItem item, {required String restoreDirectory}) async {
     isLoading.value = true;
     try {
       final restoredPath =
-      await _vault.unlockFile(item, restoreDirectory: restoreDirectory);
+          await _vault.unlockFile(item, restoreDirectory: restoreDirectory);
 
       items.removeWhere((x) => x.id == item.id || x.storedPath == item.storedPath);
       selectedIds.remove(item.id);

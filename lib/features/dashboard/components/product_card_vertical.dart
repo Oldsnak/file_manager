@@ -45,17 +45,33 @@ class MedicalCardVertical extends StatelessWidget {
         width: 280,
         padding: const EdgeInsets.all(1),
         decoration: BoxDecoration(
-          boxShadow: [TShadowStyle.verticalProductShadow],
+          boxShadow: [
+            dark ? TShadowStyle.verticalProductShadow
+                :
+              BoxShadow(
+                color: dark ? Colors.black.withOpacity(0.5) : Colors.grey.withOpacity(0.3),
+                blurRadius: 15, // Shadow ko soft karne ke liye
+                spreadRadius: 1, // Shadow kitna phele ga
+                offset: const Offset(0, 8), // Shadow ko neechay ki taraf push karne ke liye (x=0, y=8)
+              ),
+              // Optional: Inner light effect for 3D depth
+              if (!dark)
+                const BoxShadow(
+                  color: Colors.white,
+                  offset: Offset(-2, -2),
+                  blurRadius: 5,
+                ),
+          ],
           borderRadius: BorderRadius.circular(TSizes.productImageRadius),
-          border: Border.all(width: 1, color: dark ? TColors.darkGrey : TColors.buttonDisabled),
-          color: dark ? const Color(0xFF3C3C3C) : TColors.grey,
+          border: Border.all(width: 1, color: dark ? TColors.darkGrey : TColors.primary.withOpacity(0.7)),
+          color: dark ? const Color(0xFF3C3C3C) : TColors.primary.withOpacity(0.2),
         ),
         child: Column(
           children: [
             Text(
               "Internal Storage",
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: TColors.primary,
+                color: dark ? TColors.primary : TColors.black,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -66,7 +82,8 @@ class MedicalCardVertical extends StatelessWidget {
                 Container(
                   height: 180,
                   decoration: BoxDecoration(
-                    color: dark ? TColors.dark : TColors.buttonDisabled,
+                    // color: dark ? TColors.dark : TColors.buttonDisabled,
+                    color: dark ? TColors.dark : TColors.darkPrimary.withOpacity(1),
                     borderRadius: BorderRadius.circular(TSizes.cardRdiusLg),
                   ),
                   padding: EdgeInsets.all(TSizes.sm),
@@ -97,7 +114,7 @@ class MedicalCardVertical extends StatelessWidget {
                         Text(
                           "${usedGB.toStringAsFixed(1)} GB / ${totalGB.toStringAsFixed(1)} GB",
                           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: TColors.primary,
+                            color: dark ? TColors.primary : Colors.blue,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -108,11 +125,11 @@ class MedicalCardVertical extends StatelessWidget {
                           percent: percent.clamp(0.0, 1.0),
                           center: Text(
                             "${(percent * 100).toInt()}%",
-                            style: const TextStyle(fontSize: 12.0, fontWeight: FontWeight.bold),
+                            style: const TextStyle(fontSize: 12.0, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                           barRadius: const Radius.circular(10),
-                          backgroundColor: TColors.textSecondary,
-                          progressColor: TColors.primary,
+                          backgroundColor: dark ? TColors.textSecondary : TColors.darkGrey,
+                          progressColor: dark ? TColors.primary : Colors.blue,
                           animation: true,
                           animationDuration: 900,
                         ),
@@ -249,6 +266,8 @@ class fileTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool dark = THelperFunctions.isDarkMode(context);
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -263,10 +282,10 @@ class fileTile extends StatelessWidget {
                 children: [
                   Text(
                     "${space.toStringAsFixed(1)} GB",
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: TColors.darkPrimary),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: dark ? TColors.darkPrimary : Colors.black),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(Icons.arrow_forward_ios_outlined, size: 14, color: TColors.darkPrimary),
+                  Icon(Icons.arrow_forward_ios_outlined, size: 14, color: dark ? TColors.darkPrimary : TColors.black),
                 ],
               ),
             ],

@@ -1,6 +1,7 @@
 // lib/features/secure_vault/pages/vault_entry_page.dart
 import 'package:file_manager/features/secure_vault/pages/vault_home_page.dart';
 import 'package:file_manager/foundation/constants/colors.dart';
+import 'package:file_manager/foundation/helpers/helper_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -213,11 +214,12 @@ class _VaultEntryPageState extends State<VaultEntryPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final bool dark = THelperFunctions.isDarkMode(context);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: Text(_hasPin ? "Unlock Vault" : "Setup Vault", style: TextStyle(color: TColors.primary),),
+        title: Text(_hasPin ? "Unlock Vault" : "Setup Vault", style: TextStyle(color: dark ? TColors.primary : TColors.black),),
         backgroundColor: Colors.transparent,
         // centerTitle: true,
       ),

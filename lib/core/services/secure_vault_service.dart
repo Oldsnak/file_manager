@@ -240,34 +240,44 @@ class SecureVaultService {
     return item;
   }
 
+  /// Restores (decrypts and copies) a vault file to [restoreDirectory].
+  /// [restoreDirectory] must be a writable directory path chosen by the user
+  /// (e.g. from FilePicker). Returns the full path of the restored file.
+  /// Only removes the file from the vault after verifying the write succeeded.
   Future<String> unlockFile(
       VaultItem item, {
-        String? restoreDirectory,
+        required String restoreDirectory,
       }) async {
-    final src = File(item.storedPath);
-    if (!await src.exists()) throw Exception("Vault file missing");
-
-    String destPath;
-    if (item.originalPath != null && item.originalPath!.trim().isNotEmpty) {
-      destPath = _normalizePath(item.originalPath!);
-    } else {
-      if (restoreDirectory == null || restoreDirectory.trim().isEmpty) {
-        throw Exception("No restore directory provided");
-      }
-      destPath = path.join(restoreDirectory.trim(), item.name);
+    final dirPath = restoreDirectory.trim();
+    if (dirPath.isEmpty) {
+      throw Exception("No restore directory provided");
     }
 
-    await _ensureParentDirsExist(destPath);
+    final src = File(item.storedPath);
+    if (!await src.exists()) {
+      throw Exception("Vault file missing");
+    }
 
-    destPath = await _avoidOverwrite(destPath);
+    final destPath = await _avoidOverwrite(path.join(dirPath, item.name));
+    await _ensureParentDirsExist(destPath);
 
     final bytes = await src.readAsBytes();
 
     if (_isEncryptedVaultFile(bytes)) {
       final decrypted = await _decryptBytes(bytes);
-      await File(destPath).writeAsBytes(decrypted);
+      final destFile = File(destPath);
+      await destFile.writeAsBytes(decrypted);
+      if (!await destFile.exists() || (await destFile.length()) != decrypted.length) {
+        try { await destFile.delete(); } catch (_) {}
+        throw Exception("Restore failed: file could not be written correctly");
+      }
     } else {
       await src.copy(destPath);
+      final destFile = File(destPath);
+      if (!await destFile.exists() || (await destFile.length()) != bytes.length) {
+        try { await destFile.delete(); } catch (_) {}
+        throw Exception("Restore failed: file could not be written correctly");
+      }
     }
 
     await src.delete();

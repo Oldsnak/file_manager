@@ -196,6 +196,26 @@ class FileScanService {
     }
   }
 
+  /// Rename a file in place (same directory). Returns new path on success, null on failure.
+  /// Invalidates scan cache so UI reflects the change.
+  Future<String?> renameFile(String filePath, String newBasename) async {
+    if (newBasename.trim().isEmpty) return null;
+    if (newBasename.contains(RegExp(r'[/\\]'))) return null;
+    try {
+      final f = File(filePath);
+      if (!await f.exists()) return null;
+      final dir = _parentDir(filePath);
+      if (dir.isEmpty) return null;
+      final newPath = dir + (dir.endsWith('/') ? '' : '/') + newBasename.trim();
+      if (newPath == filePath) return filePath;
+      await f.rename(newPath);
+      clearCache();
+      return newPath;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Manually clear scan cache (optional)
   void clearCache() {
     _cache.clear();

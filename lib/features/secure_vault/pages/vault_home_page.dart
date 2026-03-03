@@ -1,7 +1,5 @@
 // lib/features/secure_vault/pages/vault_home_page.dart
 
-import 'dart:io';
-
 import 'package:file_manager/foundation/constants/colors.dart';
 import 'package:file_manager/foundation/helpers/helper_functions.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +8,8 @@ import 'package:get/get.dart';
 import '../../../HomePage.dart';
 import '../../../core/controllers/vault_controller.dart';
 import '../../../core/models/vault_item.dart';
-import '../components/vault_actions_sheet.dart';
+import '../../file_browser/components/item_grid.dart';
+import '../../file_browser/components/item_tile.dart';
 import '../components/vault_view_toggle.dart';
 
 class VaultHomePage extends StatefulWidget {
@@ -81,6 +80,10 @@ class _VaultHomePageState extends State<VaultHomePage>
         ),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: TColors.primary,
+          unselectedLabelColor: theme.tabBarTheme.unselectedLabelColor ??
+              theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+          indicatorColor: TColors.primary,
           tabs: const [
             Tab(text: "Videos", icon: Icon(Icons.video_file_rounded)),
             Tab(text: "Audios", icon: Icon(Icons.audiotrack_rounded)),
@@ -100,7 +103,6 @@ class _VaultHomePageState extends State<VaultHomePage>
               return _VaultTabContent(
                 items: _itemsForTab(index),
                 emptyMessage: _emptyMessage(index),
-                onTapItem: (item) => showVaultActionsSheet(context, item),
                 dark: dark,
                 theme: theme,
               );
@@ -111,6 +113,7 @@ class _VaultHomePageState extends State<VaultHomePage>
       floatingActionButton: FloatingActionButton(
         onPressed: _c.pickAndLockFiles,
         backgroundColor: TColors.primary,
+        foregroundColor: dark ? TColors.dark : TColors.white,
         child: const Icon(Icons.add),
       ),
     );
@@ -136,14 +139,12 @@ class _VaultTabContent extends StatelessWidget {
   const _VaultTabContent({
     required this.items,
     required this.emptyMessage,
-    required this.onTapItem,
     required this.dark,
     required this.theme,
   });
 
   final List<VaultItem> items;
   final String emptyMessage;
-  final void Function(VaultItem) onTapItem;
   final bool dark;
   final ThemeData theme;
 
@@ -184,13 +185,7 @@ class _VaultTabContent extends StatelessWidget {
           itemCount: items.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (context, i) {
-            final item = items[i];
-            return _VaultListTile(
-              item: item,
-              theme: theme,
-              dark: dark,
-              onTap: () => onTapItem(item),
-            );
+            return ItemTile(vaultItem: items[i]);
           },
         );
       }
@@ -204,220 +199,9 @@ class _VaultTabContent extends StatelessWidget {
           childAspectRatio: 0.92,
         ),
         itemBuilder: (context, i) {
-          final item = items[i];
-          return _VaultGridCard(
-            item: item,
-            theme: theme,
-            dark: dark,
-            onTap: () => onTapItem(item),
-          );
+          return ItemGrid(vaultItem: items[i]);
         },
       );
     });
   }
-}
-
-class _VaultListTile extends StatelessWidget {
-  const _VaultListTile({
-    required this.item,
-    required this.theme,
-    required this.dark,
-    required this.onTap,
-  });
-
-  final VaultItem item;
-  final ThemeData theme;
-  final bool dark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasFile = File(item.storedPath).existsSync();
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: hasFile ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: TColors.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: theme.dividerColor.withValues(alpha: 0.5),
-          ),
-        ),
-        child: Row(
-          children: [
-            _TypeIcon(type: item.type),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "${_formatSize(item.sizeBytes)} • ${_formatDate(item.modified)}",
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!hasFile)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(
-                  "Missing",
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: TColors.error,
-                    fontSize: 12,
-                  ),
-                ),
-              )
-            else
-              Icon(
-                Icons.chevron_right_rounded,
-                color: theme.iconTheme.color?.withValues(alpha: 0.7),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VaultGridCard extends StatelessWidget {
-  const _VaultGridCard({
-    required this.item,
-    required this.theme,
-    required this.dark,
-    required this.onTap,
-  });
-
-  final VaultItem item;
-  final ThemeData theme;
-  final bool dark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasFile = File(item.storedPath).existsSync();
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: hasFile ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: TColors.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: theme.dividerColor.withValues(alpha: 0.5),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: _TypeIcon(type: item.type),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              item.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              "${_formatSize(item.sizeBytes)} • ${_formatDate(item.modified)}",
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.8),
-              ),
-            ),
-            if (!hasFile)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  "Missing",
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: TColors.error,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TypeIcon extends StatelessWidget {
-  const _TypeIcon({required this.type});
-
-  final VaultItemType type;
-
-  @override
-  Widget build(BuildContext context) {
-    IconData icon;
-    switch (type) {
-      case VaultItemType.image:
-        icon = Icons.image_rounded;
-        break;
-      case VaultItemType.video:
-        icon = Icons.video_file_rounded;
-        break;
-      case VaultItemType.audio:
-        icon = Icons.audiotrack_rounded;
-        break;
-      case VaultItemType.document:
-        icon = Icons.description_rounded;
-        break;
-      case VaultItemType.other:
-        icon = Icons.insert_drive_file_rounded;
-        break;
-    }
-    return Container(
-      height: 44,
-      width: 44,
-      decoration: BoxDecoration(
-        color: TColors.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(icon, color: TColors.primary, size: 24),
-    );
-  }
-}
-
-String _formatSize(int bytes) {
-  if (bytes <= 0) return "0 B";
-  const kb = 1024;
-  const mb = kb * 1024;
-  const gb = mb * 1024;
-  if (bytes >= gb) return "${(bytes / gb).toStringAsFixed(2)} GB";
-  if (bytes >= mb) return "${(bytes / mb).toStringAsFixed(1)} MB";
-  if (bytes >= kb) return "${(bytes / kb).toStringAsFixed(0)} KB";
-  return "$bytes B";
-}
-
-String _formatDate(DateTime dt) {
-  final y = dt.year.toString().padLeft(4, "0");
-  final m = dt.month.toString().padLeft(2, "0");
-  final d = dt.day.toString().padLeft(2, "0");
-  return "$y-$m-$d";
 }

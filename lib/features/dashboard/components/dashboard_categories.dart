@@ -22,24 +22,24 @@ class DashboardMedicineList extends StatelessWidget {
         child: Wrap(
           children: [
             //yaha database sy sari categories fetch kry
-            CategoryNameDisplayer(name: "Downloads", icon: Icon(Iconsax.document_download, color: TColors.darkPrimary,), ontap: () => Get.to(() => const FileScanPage(title: "Downloads", category: ScanCategory.downloads,)),),
-            CategoryNameDisplayer(name: "Documents", icon: Icon(Iconsax.document, color: TColors.darkPrimary), ontap: () => Get.to(() => const FileScanPage(title: "Documents", category: ScanCategory.documents,)),),
-            CategoryNameDisplayer(name: "Apps", icon: Icon(Iconsax.android, color: TColors.darkPrimary), ontap: () => Get.to(() => const ComingSoonPage(title: "Apps", subtitle: "Apps listing needs additional Android package APIs.",)),),
+            CategoryNameDisplayer(name: "Downloads", icon: Iconsax.document_download, ontap: () => Get.to(() => const FileScanPage(title: "Downloads", category: ScanCategory.downloads,)),),
+            CategoryNameDisplayer(name: "Documents", icon: Iconsax.document, ontap: () => Get.to(() => const FileScanPage(title: "Documents", category: ScanCategory.documents,)),),
+            CategoryNameDisplayer(name: "Apps", icon: Iconsax.android, ontap: () => Get.to(() => const ComingSoonPage(title: "Apps", subtitle: "Apps listing needs additional Android package APIs.",)),),
             CategoryNameDisplayer(
               name: "Images",
-              icon: Icon(Iconsax.image, color: TColors.darkPrimary),
+              icon: Iconsax.image,
               ontap: () => Get.to(() => const BrowserPage(title: "Images", type: RequestType.image)),
             ),
 
             CategoryNameDisplayer(
               name: "Videos",
-              icon: Icon(Iconsax.video, color: TColors.darkPrimary),
+              icon: Iconsax.video,
               ontap: () => Get.to(() => const BrowserPage(title: "Videos", type: RequestType.video)),
             ),
 
             CategoryNameDisplayer(
               name: "Audios",
-              icon: Icon(Iconsax.audio_square, color: TColors.darkPrimary),
+              icon: Iconsax.audio_square,
               ontap: () => Get.to(() => const BrowserPage(title: "Audios", type: RequestType.audio)),
             ),
           ],
@@ -53,7 +53,7 @@ class CategoryNameDisplayer extends StatelessWidget {
   const CategoryNameDisplayer({
     super.key, required this.name, required this.icon, required this.ontap,
   });
-  final Icon icon;
+  final IconData icon;
   final String name;
   final Callback ontap;
 
@@ -68,15 +68,16 @@ class CategoryNameDisplayer extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: TSizes.xs, horizontal: TSizes.sm),
         margin: EdgeInsets.only(bottom: TSizes.xs, right: TSizes.xs),
         decoration: BoxDecoration(
-          color: dark ? TColors.darkContainer : Colors.white,
+          color: dark ? TColors.darkContainer : Colors.white.withOpacity(0.7),
           borderRadius: BorderRadius.circular(TSizes.sm),
+          border: Border.all(color: dark ? Colors.transparent : Colors.white)
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            icon,
-            Text(name, style: TextStyle(color: TColors.darkPrimary, fontWeight: FontWeight.bold),),
+            Icon(icon, color: dark ? TColors.darkPrimary : TColors.black,),
+            Text(name, style: TextStyle(color: dark ? TColors.darkPrimary : Colors.black, fontWeight: FontWeight.bold),),
           ],
         ),
       ),

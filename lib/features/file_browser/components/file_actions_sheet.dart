@@ -5,13 +5,70 @@ import 'package:get/get.dart';
 
 import '../../../core/controllers/file_browser_controller.dart';
 import '../../../core/models/browser_item.dart';
-import '../../../core/services/secure_vault_service.dart';
 import '../../../foundation/constants/colors.dart';
 import '../../../foundation/constants/sizes.dart';
 import '../../../foundation/helpers/helper_functions.dart';
 
-// ✅ Vault entry (handles: setup OR unlock, then returns true)
-import '../../secure_vault/pages/vault_entry_page.dart';
+void _showRenameDialog(
+  BuildContext context,
+  FileBrowserController c,
+  BrowserItem item,
+  Color textColor,
+  Color subTextColor,
+  Color accent,
+) {
+  final controller = TextEditingController(text: item.name);
+
+  showDialog<String?>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: const Text("Rename File"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: "Enter new name",
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text("Rename"),
+          ),
+        ],
+      );
+    },
+  ).then((value) {
+    if (value == null) return;
+    final newName = value.trim();
+    if (newName.isEmpty) {
+      THelperFunctions.showSnackBar("Name cannot be empty");
+      return;
+    }
+    if (newName.contains(RegExp(r'[/\\]'))) {
+      THelperFunctions.showSnackBar("Name cannot contain / or \\");
+      return;
+    }
+    if (item.isFromGallery) {
+      THelperFunctions.showSnackBar("Rename is not available for gallery items");
+      return;
+    }
+    c.renameItem(item, newName).then((ok) {
+      if (ok) {
+        THelperFunctions.showSnackBar("Renamed to $newName");
+      } else {
+        THelperFunctions.showSnackBar("Failed to rename file");
+      }
+    });
+  });
+}
 
 void showFileActionsSheet(BuildContext context, BrowserItem item) {
   final c = Get.find<FileBrowserController>();
@@ -111,7 +168,8 @@ void showFileActionsSheet(BuildContext context, BrowserItem item) {
                 },
               ),
 
-              // ✅ MOVE TO SECURE FOLDER (NEW)
+              // Move to Secure Folder: encrypts and stores in app-private storage
+              // (visible only in app's Secure Folder, not in device storage)
               _ActionTile(
                 icon: Icons.lock_outline,
                 iconColor: accent,
@@ -119,33 +177,14 @@ void showFileActionsSheet(BuildContext context, BrowserItem item) {
                 textColor: textColor,
                 onTap: () async {
                   Navigator.pop(context);
-
-                  if (item.path.isEmpty) {
+                  if (item.path.isEmpty && !item.isFromGallery) {
                     THelperFunctions.showSnackBar("File path not available");
                     return;
                   }
-
-                  // 1) Ensure vault is setup/unlocked (VaultEntryPage handles both)
-                  final ok = await Get.to<bool>(() => const VaultEntryPage());
-                  if (ok != true) return;
-
-                  // 2) Lock file into vault
-                  try {
-                    final vault = Get.find<SecureVaultService>();
-                    await vault.lockFile(item.path);
-
-                    // 3) Remove original from list / gallery
-                    if (item.isFromGallery) {
-                      // removes from MediaStore (privacy)
-                      await c.deleteItem(item);
-                    } else {
-                      c.items.removeWhere((x) => x.id == item.id);
-                      c.selectedIds.remove(item.id);
-                      if (c.selectedIds.isEmpty) c.selectionMode.value = false;
-                    }
-
+                  final ok = await c.moveToSecureVault(item);
+                  if (ok) {
                     THelperFunctions.showSnackBar("Moved to Secure Folder");
-                  } catch (_) {
+                  } else {
                     THelperFunctions.showSnackBar("Failed to move to Secure Folder");
                   }
                 },
@@ -163,13 +202,16 @@ void showFileActionsSheet(BuildContext context, BrowserItem item) {
                 },
               ),
 
-              // ---------- RENAME (COMING SOON) ----------
+              // ---------- RENAME ----------
               _ActionTile(
                 icon: Icons.drive_file_rename_outline,
-                iconColor: subTextColor,
-                title: "Rename (Coming soon)",
-                textColor: subTextColor,
-                onTap: () => Navigator.pop(context),
+                iconColor: accent,
+                title: "Rename File",
+                textColor: textColor,
+                onTap: () {
+                  Navigator.pop(context);
+                  _showRenameDialog(context, c, item, textColor, subTextColor, accent);
+                },
               ),
             ],
           ),

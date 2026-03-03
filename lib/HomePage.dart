@@ -46,10 +46,10 @@ class _HomePageState extends State<HomePage> {
         color: TColors.primary,
         animationDuration: const Duration(milliseconds: 300),
         items: [
-          Icon(Iconsax.archive_book, color: dark ? TColors.dark : TColors.white),
-          Icon(Icons.memory, color: dark ? TColors.dark : TColors.white),
-          Icon(Iconsax.security_safe, color: dark ? TColors.dark : TColors.white),
-          Icon(Icons.tune, color: dark ? TColors.dark : TColors.white),
+          Icon(Iconsax.archive_book, color: dark ? TColors.dark : TColors.black),
+          Icon(Icons.memory, color: dark ? TColors.dark : TColors.black),
+          Icon(Iconsax.security_safe, color: dark ? TColors.dark : TColors.black),
+          Icon(Icons.tune, color: dark ? TColors.dark : TColors.black),
         ],
       ),
     );

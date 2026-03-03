@@ -127,7 +127,7 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
                               SectionHeading(
                                 title: 'Quick Actions',
                                 showActionButton: false,
-                                textColor: dark ? Colors.black : Colors.white,
+                                textColor: Colors.black,
                               ),
                               const SizedBox(height: TSizes.spaceBtwItems / 2),
                               const SocialApps(),
@@ -234,19 +234,13 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
                                       hintText: 'Paste Links here',
                                       hintStyle: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: TColors.darkPrimary,
+                                        color: TColors.primary,
                                       ),
-                                      border: UnderlineInputBorder(
-                                        borderSide:
-                                        BorderSide(color: TColors.darkGrey, width: 2),
-                                      ),
-                                      enabledBorder: UnderlineInputBorder(
-                                        borderSide:
-                                        BorderSide(color: TColors.darkGrey, width: 2),
-                                      ),
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
                                       focusedBorder: UnderlineInputBorder(
                                         borderSide:
-                                        BorderSide(color: TColors.darkPrimary, width: 2),
+                                        BorderSide(color: TColors.primary, width: 2),
                                       ),
                                       contentPadding:
                                       const EdgeInsets.symmetric(vertical: 12),
