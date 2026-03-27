@@ -11,6 +11,7 @@ import '../../../foundation/constants/colors.dart';
 import '../../../foundation/constants/sizes.dart';
 import '../../../foundation/helpers/helper_functions.dart';
 import '../../secure_vault/components/vault_actions_sheet.dart';
+import '../../secure_vault/components/vault_item_thumbnail.dart';
 import '../../secure_vault/vault_opener.dart';
 import 'file_actions_sheet.dart';
 
@@ -93,16 +94,20 @@ class ItemTile extends StatelessWidget {
             leading: Stack(
               alignment: Alignment.topRight,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(TSizes.borderRadiusMd),
+                  child: Container(
+                    width: 44,
+                    height: 44,
                     color: dark
                         ? TColors.darkOptionalContainer
                         : TColors.lightOptionalContainer,
-                    borderRadius: BorderRadius.circular(TSizes.borderRadiusMd),
+                    child: VaultItemThumbnail(
+                      item: v,
+                      fit: BoxFit.cover,
+                      fallback: Icon(_iconForVault(v), color: iconColor, size: 28),
+                    ),
                   ),
-                  child: Icon(_iconForVault(v), color: iconColor),
                 ),
                 if (inSelection)
                   Positioned(

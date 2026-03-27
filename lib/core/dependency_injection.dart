@@ -10,7 +10,6 @@ import 'controllers/ram_controller.dart';
 import 'controllers/vault_controller.dart';
 import 'services/downloader_service.dart';
 import 'services/social_detector_service.dart';
-import 'controllers/downloader_controller.dart';
 import 'services/file_scan_service.dart';
 import 'services/media_service.dart';
 import 'services/permission_service.dart';
@@ -59,15 +58,6 @@ class DependencyInjection {
       DownloaderService(
         baseUrl: ApiConfig.effectiveBaseUrl,
         apiKey: ApiConfig.effectiveApiKey,
-      ),
-      permanent: true,
-    );
-
-// ---------------- Downloader controller ----------------
-    Get.put<DownloaderController>(
-      DownloaderController(
-        downloaderService: Get.find<DownloaderService>(),
-        socialDetector: Get.find<SocialDetectorService>(),
       ),
       permanent: true,
     );

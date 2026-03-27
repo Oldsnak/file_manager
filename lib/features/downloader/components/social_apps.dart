@@ -1,8 +1,10 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:file_manager/core/services/download_jobs_registry.dart';
 import 'package:file_manager/foundation/constants/sizes.dart';
 import 'package:flutter/material.dart';
 
 import '../../../foundation/constants/assets.dart';
+import '../pages/downloads_library_page.dart';
 import '../pages/social_webview_page.dart';
 
 class SocialApps extends StatelessWidget {
@@ -61,14 +63,45 @@ class SocialApps extends StatelessWidget {
                 url: "https://www.tiktok.com/",
               ),
             ),
-            AnimatedSocialIcon(
-              assetPath: download,
-              onTap: () {
-                // Download icon: by default open a neutral page (you can change later)
-                _openWeb(
-                  context,
-                  platform: "download",
-                  url: "https://www.google.com/",
+            ListenableBuilder(
+              listenable: DownloadJobsRegistry.instance,
+              builder: (context, _) {
+                final showDot = DownloadJobsRegistry.instance.showActiveIndicator;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    AnimatedSocialIcon(
+                      assetPath: download,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const DownloadsLibraryPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    if (showDot)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          width: 11,
+                          height: 11,
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.25),
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),

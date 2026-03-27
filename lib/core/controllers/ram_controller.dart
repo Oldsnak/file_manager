@@ -15,8 +15,11 @@ class RamController extends GetxController {
   // animation progress 0..1
   final cleanProgress = 0.0.obs;
 
-  // just for UI feedback
-  final freedBytesFake = 0.obs;
+  /// Shown when [refreshRam] measures less used RAM after cleaning.
+  final freedBytesReported = 0.obs;
+
+  /// Android: packages we asked the system to clear from background (not foreground).
+  final backgroundAppsTouched = 0.obs;
 
   @override
   void onInit() {
@@ -38,7 +41,8 @@ class RamController extends GetxController {
 
     isCleaning.value = true;
     cleanProgress.value = 0.0;
-    freedBytesFake.value = 0;
+    freedBytesReported.value = 0;
+    backgroundAppsTouched.value = 0;
 
     // start progress animation (pleasant feel)
     for (int i = 1; i <= 30; i++) {
@@ -46,22 +50,18 @@ class RamController extends GetxController {
       cleanProgress.value = i / 30;
     }
 
-    // best-effort trim
-    await _ram.cleanRamBestEffort();
-
-    // refresh stats after a short delay
-    await Future.delayed(const Duration(milliseconds: 250));
     final beforeUsed = usedBytes.value;
+    final touched = await _ram.cleanRamBestEffort();
+    backgroundAppsTouched.value = touched;
+
+    // Let the system reclaim before re-measuring.
+    await Future.delayed(const Duration(milliseconds: 400));
     await refreshRam();
     final afterUsed = usedBytes.value;
 
-    // Some devices show no change; so UI shows a small "freed" feedback anyway.
     final realFreed = max(0, beforeUsed - afterUsed);
     if (realFreed > 0) {
-      freedBytesFake.value = realFreed;
-    } else {
-      // show a small fake freed for UX only (optional)
-      freedBytesFake.value = 40 * 1024 * 1024; // 40 MB feel
+      freedBytesReported.value = realFreed;
     }
 
     // finish animation

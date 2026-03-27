@@ -203,8 +203,24 @@ class RamCleanerPage extends StatelessWidget {
 
                       // Freed info (UX)
                       Obx(() {
-                        final freed = c.freedBytesFake.value;
-                        if (freed <= 0) return const SizedBox.shrink();
+                        final freed = c.freedBytesReported.value;
+                        final touched = c.backgroundAppsTouched.value;
+                        if (freed <= 0 && touched <= 0) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final lines = <String>[];
+                        if (touched > 0) {
+                          lines.add(
+                            'Asked Android to drop background work for $touched other app(s). '
+                            'Apps you see on screen stay open (system rule).',
+                          );
+                        }
+                        if (freed > 0) {
+                          lines.add(
+                            'Device reports ~${c.formatBytes(freed)} less RAM in use now.',
+                          );
+                        }
 
                         return Container(
                           width: double.infinity,
@@ -214,24 +230,26 @@ class RamCleanerPage extends StatelessWidget {
                                 ? TColors.darkPrimaryContainer
                                 : TColors.lightPrimaryContainer,
                             borderRadius:
-                            BorderRadius.circular(TSizes.borderRadiusLg),
+                                BorderRadius.circular(TSizes.borderRadiusLg),
                             border: Border.all(
                                 color: TColors.primary.withOpacity(0.35)),
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Icon(Icons.auto_awesome,
                                   color: TColors.primary),
                               const SizedBox(width: TSizes.sm),
                               Expanded(
                                 child: Text(
-                                  "Freed approx ${c.formatBytes(freed)}",
+                                  lines.join('\n\n'),
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodyMedium
                                       ?.copyWith(
                                     color: titleColor,
                                     fontWeight: FontWeight.w600,
+                                    height: 1.35,
                                   ),
                                 ),
                               ),

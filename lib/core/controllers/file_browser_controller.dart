@@ -287,28 +287,41 @@ class FileBrowserController extends GetxController {
   // OPEN / DELETE
   // ==================================================
 
-  Future<void> openItem(BrowserItem item) async {
+  /// [siblingFiles] — when set (e.g. hierarchical folder view), used to build
+  /// image/video/audio playlists instead of the global [items] list.
+  Future<void> openItem(
+    BrowserItem item, {
+    List<BrowserItem>? siblingFiles,
+  }) async {
     if (selectionMode.value) {
       toggleSelection(item.id);
       return;
     }
     if (item.path.isEmpty) return;
 
+    final pool = siblingFiles ?? items.toList();
+
     final isPdf = item.name.toLowerCase().endsWith('.pdf') ||
         (item.mimeType.isNotEmpty && item.mimeType.toLowerCase().contains('pdf'));
 
     if (item.isVideo) {
-      final playlist = items.where((i) => i.isVideo && i.path.isNotEmpty).toList();
+      var playlist =
+          pool.where((i) => i.isVideo && i.path.isNotEmpty).toList();
+      if (playlist.isEmpty) playlist = [item];
       Get.to(() => InAppVideoPlayerPage(initialItem: item, playlist: playlist));
       return;
     }
     if (item.isAudio) {
-      final playlist = items.where((i) => i.isAudio && i.path.isNotEmpty).toList();
+      var playlist =
+          pool.where((i) => i.isAudio && i.path.isNotEmpty).toList();
+      if (playlist.isEmpty) playlist = [item];
       Get.to(() => InAppAudioPlayerPage(initialItem: item, playlist: playlist));
       return;
     }
     if (item.isImage) {
-      final playlist = items.where((i) => i.isImage && i.path.isNotEmpty).toList();
+      var playlist =
+          pool.where((i) => i.isImage && i.path.isNotEmpty).toList();
+      if (playlist.isEmpty) playlist = [item];
       Get.to(() => InAppImageViewerPage(initialItem: item, playlist: playlist));
       return;
     }

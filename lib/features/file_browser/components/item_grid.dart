@@ -11,6 +11,7 @@ import '../../../core/models/browser_item.dart';
 import '../../../core/models/vault_item.dart';
 import '../../../core/services/media_service.dart';
 import '../../secure_vault/components/vault_actions_sheet.dart';
+import '../../secure_vault/components/vault_item_thumbnail.dart';
 import '../../secure_vault/vault_opener.dart';
 import '../../../core/controllers/vault_controller.dart';
 import 'file_actions_sheet.dart';
@@ -136,11 +137,15 @@ class _ItemGridState extends State<ItemGrid> {
                       child: ClipRRect(
                         borderRadius:
                             BorderRadius.circular(TSizes.borderRadiusMd),
-                        child: Center(
-                          child: Icon(
-                            _iconForVaultItem(v),
-                            size: 34,
-                            color: iconColor,
+                        child: VaultItemThumbnail(
+                          item: v,
+                          fit: BoxFit.cover,
+                          fallback: Center(
+                            child: Icon(
+                              _iconForVaultItem(v),
+                              size: 34,
+                              color: iconColor,
+                            ),
                           ),
                         ),
                       ),

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:get/get.dart';
 
@@ -153,6 +151,45 @@ class VaultController extends GetxController {
       selectedIds.add(it.id);
     }
     if (selectedIds.isNotEmpty) selectionMode.value = true;
+  }
+
+  /// Select only the given ids (e.g. all items on the current vault tab).
+  void selectAllWithIds(Iterable<String> ids) {
+    selectedIds.clear();
+    selectedIds.addAll(ids);
+    if (selectedIds.isNotEmpty) {
+      selectionMode.value = true;
+    }
+  }
+
+  /// Unlock every selected item into [restoreDirectory] (user-picked folder).
+  /// Returns how many files were restored successfully.
+  Future<int> unlockSelectedToDirectory(String restoreDirectory) async {
+    final dir = restoreDirectory.trim();
+    if (dir.isEmpty || selectedIds.isEmpty) return 0;
+
+    final list =
+        items.where((x) => selectedIds.contains(x.id)).toList(growable: false);
+    if (list.isEmpty) return 0;
+
+    isLoading.value = true;
+    var ok = 0;
+    try {
+      for (final it in list) {
+        try {
+          final path = await _vault.unlockFile(it, restoreDirectory: dir);
+          if (path.isNotEmpty) {
+            ok++;
+            items.removeWhere(
+                (x) => x.id == it.id || x.storedPath == it.storedPath);
+          }
+        } catch (_) {}
+      }
+    } finally {
+      isLoading.value = false;
+      clearSelection();
+    }
+    return ok;
   }
 
   void clearSelection() {

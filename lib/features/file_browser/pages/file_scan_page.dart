@@ -126,6 +126,24 @@ class _FileScanPageState extends State<FileScanPage> {
                 onPressed: c.selectAll,
               ),
               IconButton(
+                icon: Icon(Icons.enhanced_encryption, color: accent),
+                tooltip: "Move to Secure Folder",
+                onPressed: () async {
+                  if (c.selectedIds.isEmpty) return;
+                  final n = await c.moveSelectedToSecureVault();
+                  if (!context.mounted) return;
+                  if (n > 0) {
+                    THelperFunctions.showSnackBar(
+                      n == 1
+                          ? "1 item moved to Secure Folder"
+                          : "$n items moved to Secure Folder",
+                    );
+                  } else {
+                    THelperFunctions.showSnackBar("No items moved to Secure Folder");
+                  }
+                },
+              ),
+              IconButton(
                 icon: const Icon(Icons.delete_outline, color: TColors.error),
                 tooltip: "Delete Selected",
                 onPressed: () async {

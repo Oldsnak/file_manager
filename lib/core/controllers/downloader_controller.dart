@@ -1,19 +1,15 @@
 // lib/core/controllers/downloader_controller.dart
 
 import 'dart:async';
-import 'dart:io';
 
-import 'package:external_path/external_path.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:media_scanner/media_scanner.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../models/video_info_model.dart';
 import '../models/video_quality_model.dart';
+import '../services/device_video_save_service.dart';
+import '../services/download_jobs_registry.dart';
 import '../services/downloader_service.dart';
 import '../services/social_detector_service.dart';
 
@@ -52,8 +48,11 @@ class DownloaderController extends ChangeNotifier {
   /// After job finishes, file is downloaded from API and saved to device.
   String? _lastSavedFilePath;
   String? _lastSaveError;
-  String? _saveTriggeredForJobId;
+  final Set<String> _saveTriggeredJobIds = {};
   bool _isSavingToDevice = false;
+
+  /// When true, the single-video preview card is hidden (after download starts).
+  bool _previewCardDismissed = false;
 
   StreamSubscription<Map<String, dynamic>>? _sseSub;
   Timer? _pollTimer;
@@ -93,8 +92,7 @@ class DownloaderController extends ChangeNotifier {
     if (p == null || p.percent == null) return null;
     final raw = p.percent!;
     if (raw.isNaN) return null;
-    final clamped = raw.clamp(0, 100);
-    return (clamped is num ? clamped.toDouble() : 0.0) / 100.0;
+    return raw.clamp(0, 100) / 100.0;
   }
 
   /// Path where the last completed download was saved (e.g. Downloads folder).
@@ -117,6 +115,60 @@ class DownloaderController extends ChangeNotifier {
   String? get currentDownloadingSourceUrl => _currentDownloadingSourceUrl;
   bool get playlistDownloadCompleted => _playlistDownloadCompleted;
   bool isPlaylistItemCompleted(String sourceUrl) => _completedPlaylistSourceUrls.contains(sourceUrl);
+
+  /// Single-video card visible only before user starts a download for the current preview.
+  bool get shouldShowSingleVideoCard =>
+      !_isPlaylistMode &&
+      _videoInfo != null &&
+      _selectedQuality != null &&
+      !_previewCardDismissed;
+
+  /// Load registry, restore active job from storage, sync pending saves (e.g. after app restart).
+  Future<void> bootstrap() async {
+    DownloadJobsRegistry.instance.load();
+    await _restoreActiveJobIfAny();
+    await syncPendingJobsFromRegistry();
+  }
+
+  /// Call when app returns to foreground.
+  Future<void> onAppResumed() async {
+    await _restoreActiveJobIfAny();
+    await syncPendingJobsFromRegistry();
+  }
+
+  /// Finish any jobs that completed on the server while the UI was away.
+  Future<void> syncPendingJobsFromRegistry() async {
+    DownloadJobsRegistry.instance.load();
+    for (final j in DownloadJobsRegistry.instance.jobs) {
+      if (j.phase != DownloadPhase.downloading && j.phase != DownloadPhase.saving) {
+        continue;
+      }
+      if (j.localPath != null && j.localPath!.isNotEmpty) continue;
+      try {
+        final st = await downloaderService.getStatus(j.jobId);
+        if (st.status == 'finished') {
+          await _onJobFinished(j.jobId);
+        } else if (st.status == 'failed') {
+          DownloadJobsRegistry.instance.applyCompletion(
+            jobId: j.jobId,
+            localPath: null,
+            error: st.error ?? 'Download failed',
+          );
+        }
+      } catch (_) {}
+    }
+  }
+
+  void _touchRegistryProgress() {
+    final id = _jobId;
+    if (id == null) return;
+    final p = progressValue;
+    DownloadJobsRegistry.instance.updateJob(
+      id,
+      phase: DownloadPhase.downloading,
+      percent: p != null ? p * 100 : null,
+    );
+  }
 
   /// Call after showing [lastSavedFilePath] or [lastSaveError] in UI so it is not shown again.
   void clearLastSaveResult() {
@@ -143,6 +195,7 @@ class DownloaderController extends ChangeNotifier {
 
     _clearError();
     _resetJobState();
+    _previewCardDismissed = false;
 
     final normalized = socialDetector.normalizeUrl(raw);
 
@@ -205,6 +258,7 @@ class DownloaderController extends ChangeNotifier {
     if (_isPlaylistMode == value) return;
     _isPlaylistMode = value;
     _playlistItems.clear();
+    _previewCardDismissed = false;
     if (value) {
       // entering playlist mode – clear single-video state
       _videoInfo = null;
@@ -223,6 +277,7 @@ class DownloaderController extends ChangeNotifier {
     _clearError();
     _resetJobState();
     _playlistItems.clear();
+    _previewCardDismissed = false;
 
     final normalized = socialDetector.normalizeUrl(raw);
 
@@ -316,16 +371,25 @@ class DownloaderController extends ChangeNotifier {
 
   void cancelDownload() {
     _cancelRequested = true;
+    final jid = _jobId;
     _sseSub?.cancel();
     _sseSub = null;
     _stopPolling();
     try {
       GetStorage().remove(_activeJobStorageKey);
     } catch (_) {}
+    if (jid != null) {
+      DownloadJobsRegistry.instance.applyCompletion(
+        jobId: jid,
+        localPath: null,
+        error: 'Cancelled',
+      );
+    }
     _isDownloading = false;
     _jobId = null;
     _jobStatus = null;
     _progress = null;
+    _previewCardDismissed = false;
     notifyListeners();
   }
 
@@ -350,7 +414,7 @@ class DownloaderController extends ChangeNotifier {
       final started = await downloaderService.startDownload(
         url: url,
         formatId: formatId,
-        filenameHint: _safeFileName(_videoInfo!.title),
+        filenameHint: _filenameHintFromTitle(_videoInfo!.title),
       );
 
       _jobId = started.jobId;
@@ -362,6 +426,22 @@ class DownloaderController extends ChangeNotifier {
         GetStorage().write(_activeJobStorageKey, {'job_id': _jobId});
       } catch (_) {}
 
+      _previewCardDismissed = true;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      DownloadJobsRegistry.instance.upsertJob(
+        DownloadJobRecord(
+          jobId: started.jobId,
+          title: _videoInfo!.title ?? 'Video',
+          sourceUrl: _videoInfo!.sourceUrl,
+          thumbnailUrl: _videoInfo!.thumbnail,
+          phase: DownloadPhase.downloading,
+          percent: 0,
+          localPath: null,
+          error: null,
+          createdAtMs: now,
+          updatedAtMs: now,
+        ),
+      );
       notifyListeners();
 
       // Start SSE progress stream
@@ -409,11 +489,21 @@ class DownloaderController extends ChangeNotifier {
           _stopPolling();
           _sseSub?.cancel();
           final id = _jobId;
-          if (id != null) _onJobFinished(id);
+          if (id != null) unawaited(_onJobFinished(id));
         } else if (_jobStatus == 'failed') {
           _isDownloading = false;
           _stopPolling();
           _sseSub?.cancel();
+          final id = _jobId;
+          if (id != null) {
+            DownloadJobsRegistry.instance.applyCompletion(
+              jobId: id,
+              localPath: null,
+              error: _jobError ?? 'Download failed',
+            );
+          }
+        } else {
+          _touchRegistryProgress();
         }
 
         notifyListeners();
@@ -447,7 +537,17 @@ class DownloaderController extends ChangeNotifier {
         if (_jobStatus == 'finished' || _jobStatus == 'failed') {
           _isDownloading = false;
           _stopPolling();
-          if (_jobStatus == 'finished' && jobId != null) _onJobFinished(jobId);
+          if (_jobStatus == 'finished') {
+            unawaited(_onJobFinished(jobId));
+          } else {
+            DownloadJobsRegistry.instance.applyCompletion(
+              jobId: jobId,
+              localPath: null,
+              error: _jobError ?? 'Download failed',
+            );
+          }
+        } else {
+          _touchRegistryProgress();
         }
 
         notifyListeners();
@@ -460,17 +560,14 @@ class DownloaderController extends ChangeNotifier {
 
   /// Called once when job reaches "finished". Downloads file from API and saves to device.
   Future<void> _onJobFinished(String jobId) async {
-    if (_saveTriggeredForJobId == jobId) return;
-    _saveTriggeredForJobId = jobId;
+    if (_saveTriggeredJobIds.contains(jobId)) return;
+    _saveTriggeredJobIds.add(jobId);
     // clear persisted active job
     try {
       GetStorage().remove(_activeJobStorageKey);
     } catch (_) {}
     await _saveDownloadToDevice(jobId);
   }
-
-  /// App folder name at root of internal storage (e.g. /storage/emulated/0/FileManager).
-  static const String _appDownloadFolderName = 'FileManager';
 
   static const String _activeJobStorageKey = 'downloader_active_job';
 
@@ -504,92 +601,27 @@ class DownloaderController extends ChangeNotifier {
     _lastSavedFilePath = null;
     _lastSaveError = null;
     _isSavingToDevice = true;
+    DownloadJobsRegistry.instance.updateJob(jobId, phase: DownloadPhase.saving);
     notifyListeners();
 
     try {
-      if (Platform.isAndroid) {
-        final PermissionStatus status = await _requestStoragePermission();
-        if (!status.isGranted) {
-          _lastSaveError = 'Storage permission required. Enable in app settings.';
-          _isSavingToDevice = false;
-          notifyListeners();
-          return;
-        }
+      final r = await DeviceVideoSaveService.saveJobToDevice(jobId: jobId, service: downloaderService);
+      if (r.path != null) {
+        _lastSavedFilePath = r.path;
+        _lastSaveError = null;
+        DownloadJobsRegistry.instance.applyCompletion(jobId: jobId, localPath: r.path, error: null);
+      } else {
+        _lastSaveError = r.error;
+        DownloadJobsRegistry.instance.applyCompletion(jobId: jobId, localPath: null, error: r.error);
       }
-
-      final String dirPath = await _getAppDownloadDirectoryPath();
-      if (dirPath.isEmpty) {
-        _lastSaveError = 'Storage folder not available. Grant storage permission.';
-        _isSavingToDevice = false;
-        notifyListeners();
-        return;
-      }
-
-      final dir = Directory(dirPath);
-      if (!await dir.exists()) await dir.create(recursive: true);
-
-      final file = await downloaderService.downloadFile(jobId);
-      final safeName = _safeFileName(file.filename) ?? '$jobId.mp4';
-      final outFile = File(path.join(dirPath, safeName));
-      await outFile.writeAsBytes(file.bytes);
-
-      if (Platform.isAndroid) {
-        try {
-          await MediaScanner.loadMedia(path: outFile.path);
-        } catch (e) {
-          debugPrint('MediaScanner failed (video still saved): $e');
-        }
-      }
-
-      _lastSavedFilePath = outFile.path;
-      _lastSaveError = null;
     } catch (e) {
       _lastSaveError = 'Save failed: $e';
       debugPrint('Save download to device failed: $e');
+      DownloadJobsRegistry.instance.applyCompletion(jobId: jobId, localPath: null, error: _lastSaveError);
     } finally {
       _isSavingToDevice = false;
       notifyListeners();
     }
-  }
-
-  Future<PermissionStatus> _requestStoragePermission() async {
-    if (await Permission.manageExternalStorage.isGranted) return PermissionStatus.granted;
-    if (await Permission.storage.isGranted) return PermissionStatus.granted;
-    final manage = await Permission.manageExternalStorage.request();
-    if (manage.isGranted) return PermissionStatus.granted;
-    final storage = await Permission.storage.request();
-    return storage;
-  }
-
-  /// Returns path to app folder in user-visible storage:
-  /// Android: Download/FileManager (e.g. /storage/emulated/0/Download/FileManager).
-  /// Falls back to app-specific dir if public path is not available.
-  Future<String> _getAppDownloadDirectoryPath() async {
-    if (Platform.isAndroid) {
-      try {
-        // Prefer public Download folder so files are visible in Files app and can be scanned to gallery
-        final String publicDownload = await ExternalPath.getExternalStoragePublicDirectory(
-          ExternalPath.DIRECTORY_DOWNLOAD,
-        );
-        if (publicDownload.trim().isNotEmpty) {
-          return path.join(publicDownload.trim(), _appDownloadFolderName);
-        }
-      } catch (e) {
-        debugPrint('ExternalPath getExternalStoragePublicDirectory failed: $e');
-      }
-      try {
-        final List<String>? roots = await ExternalPath.getExternalStorageDirectories();
-        if (roots != null && roots.isNotEmpty && roots.first.trim().isNotEmpty) {
-          return path.join(roots.first.trim(), _appDownloadFolderName);
-        }
-      } catch (e) {
-        debugPrint('ExternalPath getExternalStorageDirectories failed: $e');
-      }
-    }
-    final dir = await getDownloadsDirectory();
-    if (dir != null) return dir.path;
-    final appDir = await getApplicationDocumentsDirectory();
-    return path.join(appDir.path, _appDownloadFolderName);
   }
 
   void _stopPolling() {
@@ -610,6 +642,13 @@ class DownloaderController extends ChangeNotifier {
     _error = null;
   }
 
+  /// Clears [error] after the UI has shown it (e.g. MaterialBanner), so rebuilds do not re-queue notices.
+  void clearError() {
+    if (_error == null) return;
+    _error = null;
+    notifyListeners();
+  }
+
   void _resetJobState() {
     _jobId = null;
     _jobStatus = null;
@@ -619,7 +658,6 @@ class DownloaderController extends ChangeNotifier {
     _isDownloading = false;
     _lastSavedFilePath = null;
     _lastSaveError = null;
-    _saveTriggeredForJobId = null;
 
     _sseSub?.cancel();
     _sseSub = null;
@@ -627,16 +665,52 @@ class DownloaderController extends ChangeNotifier {
     _stopPolling();
   }
 
-  String? _safeFileName(String? title) {
-    if (title == null) return null;
-    var s = title.trim();
-    if (s.isEmpty) return null;
+  /// Characters allowed in the title stem (before extension). Everything else → '_'.
+  static final RegExp _nonAllowedStemChars = RegExp(r'[^a-zA-Z0-9#\$_\-]');
 
-    // remove illegal filename characters (Windows-friendly)
-    s = s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '');
-    s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (s.length > 80) s = s.substring(0, 80).trim();
-    return s.isEmpty ? null : s;
+  static const int _maxHintStemLength = 100;
+
+  static const Set<String> _knownVideoExtensions = {
+    '.mp4',
+    '.mkv',
+    '.webm',
+    '.m4a',
+    '.mov',
+    '.avi',
+    '.opus',
+    '.3gp',
+    '.mpeg',
+    '.mpg',
+  };
+
+  static bool _isKnownVideoExt(String extLower) =>
+      _knownVideoExtensions.contains(extLower.toLowerCase());
+
+  /// Hint sent to API (server appends random digits + job id + extension).
+  String? _filenameHintFromTitle(String? title) {
+    if (title == null) return null;
+    var stem = title.trim();
+    if (stem.isEmpty) return null;
+    final ext = path.extension(stem);
+    if (ext.isNotEmpty && _isKnownVideoExt(ext)) {
+      stem = path.basenameWithoutExtension(stem);
+    }
+    stem = _sanitizeStemSegment(stem, _maxHintStemLength);
+    return stem.isEmpty ? null : stem;
+  }
+
+  /// Sanitize stem only: allowed charset, collapse '_', cap length. Never touches extension.
+  static String _sanitizeStemSegment(String stem, int maxLength) {
+    var s = stem.replaceAll(_nonAllowedStemChars, '_');
+    s = s.replaceAll(RegExp(r'_+'), '_');
+    s = s.replaceAll(RegExp(r'^_+|_+$'), '');
+    if (s.isEmpty) s = 'video';
+    if (s.length > maxLength) {
+      s = s.substring(0, maxLength);
+      s = s.replaceAll(RegExp(r'_+$'), '');
+    }
+    if (s.isEmpty) s = 'video';
+    return s;
   }
 
   // -----------------------

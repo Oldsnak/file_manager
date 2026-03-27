@@ -68,25 +68,40 @@ class RamService {
     }
   }
 
-  /// ✅ "Cleaner" (best effort)
-  /// NOTE: Actual cleaning is limited on Android for 3rd party apps.
-  /// We clear Flutter caches and ask native to trim memory.
-  Future<void> cleanRamBestEffort() async {
+  /// Clears in-process caches, trims this app on native, and on Android asks
+  /// the system to drop **background** processes for other user-installed apps
+  /// ([KILL_BACKGROUND_PROCESSES]). Foreground apps cannot be force-closed by
+  /// third-party apps on Android.
+  Future<int> cleanRamBestEffort() async {
+    var backgroundPackagesTouched = 0;
     try {
-      // Flutter memory pressure hint
       WidgetsBinding.instance.handleMemoryPressure();
-
-      // Clear image cache
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
 
-      // Ask native side to trim (if implemented)
-      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-        await _channel.invokeMethod("trimMemory");
+      if (!kIsWeb && Platform.isAndroid) {
+        try {
+          final dynamic res = await _channel.invokeMethod('killBackgroundApps');
+          if (res is Map) {
+            final c = res['count'];
+            if (c is int) backgroundPackagesTouched = c;
+            if (c is num) backgroundPackagesTouched = c.toInt();
+          }
+        } catch (_) {
+          // Channel missing or permission denied
+        }
+        try {
+          await _channel.invokeMethod('trimMemory');
+        } catch (_) {}
+      } else if (!kIsWeb && Platform.isIOS) {
+        try {
+          await _channel.invokeMethod('trimMemory');
+        } catch (_) {}
       }
     } catch (_) {
-      // ignore silently
+      // ignore
     }
+    return backgroundPackagesTouched;
   }
 
   int _toIntSafe(dynamic v) {

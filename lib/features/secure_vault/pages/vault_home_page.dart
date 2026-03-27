@@ -2,6 +2,7 @@
 
 import 'package:file_manager/foundation/constants/colors.dart';
 import 'package:file_manager/foundation/helpers/helper_functions.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -30,7 +31,50 @@ class _VaultHomePageState extends State<VaultHomePage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _c.refreshVault();
+  }
+
+  Future<void> _unlockSelected(BuildContext context) async {
+    final count = _c.selectedIds.length;
+    if (count == 0) return;
+
+    final restoreDir = await FilePicker.platform.getDirectoryPath();
+    if (restoreDir == null || restoreDir.trim().isEmpty) {
+      THelperFunctions.showSnackBar('Restore folder not selected');
+      return;
+    }
+
+    if (!context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Unlock files?'),
+        content: Text(
+          'Restore $count item(s) to the chosen folder?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Unlock'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final total = count;
+    final ok = await _c.unlockSelectedToDirectory(restoreDir);
+    if (!context.mounted) return;
+    THelperFunctions.showSnackBar('Unlocked $ok / $total');
   }
 
   @override
@@ -67,17 +111,55 @@ class _VaultHomePageState extends State<VaultHomePage>
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text("Secure Vault"),
-        actions: [const VaultViewToggle()],
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: theme.appBarTheme.iconTheme?.color,
-          ),
-          onPressed: () {
-            Get.offAll(() => const HomePage());
-          },
-        ),
+        title: Obx(() {
+          if (_c.selectionMode.value) {
+            return Text('${_c.selectedIds.length} selected');
+          }
+          return const Text('Secure Vault');
+        }),
+        actions: [
+          Obx(() {
+            if (_c.selectionMode.value) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Select all (this tab)',
+                    icon: const Icon(Icons.select_all_rounded),
+                    onPressed: () {
+                      final tabItems = _itemsForTab(_tabController.index);
+                      _c.selectAllWithIds(tabItems.map((e) => e.id));
+                    },
+                  ),
+                  IconButton(
+                    tooltip: 'Unlock',
+                    icon: const Icon(Icons.lock_open_rounded),
+                    onPressed: () => _unlockSelected(context),
+                  ),
+                ],
+              );
+            }
+            return const VaultViewToggle();
+          }),
+        ],
+        leading: Obx(() {
+          if (_c.selectionMode.value) {
+            return IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: 'Clear selection',
+              onPressed: _c.clearSelection,
+            );
+          }
+          return IconButton(
+            icon: Icon(
+              Icons.arrow_back,
+              color: theme.appBarTheme.iconTheme?.color,
+            ),
+            onPressed: () {
+              Get.offAll(() => const HomePage());
+            },
+          );
+        }),
         bottom: TabBar(
           controller: _tabController,
           labelColor: TColors.primary,
@@ -193,10 +275,10 @@ class _VaultTabContent extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         itemCount: items.length,
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.92,
+          crossAxisCount: 3,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 0.88,
         ),
         itemBuilder: (context, i) {
           return ItemGrid(vaultItem: items[i]);

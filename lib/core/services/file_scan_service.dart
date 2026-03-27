@@ -25,6 +25,17 @@ class ScanFolder {
   double get totalGB => totalBytes / (1024 * 1024 * 1024);
 }
 
+/// Immediate children of a directory (folders + files) for hierarchical browsing.
+class DirectoryLevelListing {
+  final List<String> folderPaths;
+  final List<BrowserItem> files;
+
+  const DirectoryLevelListing({
+    required this.folderPaths,
+    required this.files,
+  });
+}
+
 class FileScanService {
   /// ✅ in-memory cache (prevents rescanning on every scroll/sort)
   /// key format:
@@ -393,6 +404,76 @@ class FileScanService {
     }
 
     return false;
+  }
+
+  /// Lists only direct subfolders and files under [dirPath] (one tree level).
+  /// Uses the same skip rules as deep scans. Sorted A–Z: folders first, then files.
+  Future<DirectoryLevelListing> listDirectoryLevel(String dirPath) async {
+    final ok = await ensureStorageAccess(category: ScanCategory.downloads);
+    if (!ok) {
+      return const DirectoryLevelListing(folderPaths: [], files: []);
+    }
+
+    var normalized = dirPath.trim().replaceAll("\\", "/");
+    if (normalized.isEmpty) {
+      return const DirectoryLevelListing(folderPaths: [], files: []);
+    }
+
+    while (normalized.length > 1 && normalized.endsWith("/")) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+
+    final dir = Directory(normalized);
+    if (!await dir.exists()) {
+      return const DirectoryLevelListing(folderPaths: [], files: []);
+    }
+
+    final folders = <String>[];
+    final files = <BrowserItem>[];
+
+    try {
+      await for (final entity in dir.list(followLinks: false)) {
+        final p = entity.path.replaceAll("\\", "/");
+        if (_shouldSkipPath(p)) continue;
+
+        final base = _basename(p);
+        if (base.startsWith(".") && base.length > 1) continue;
+
+        try {
+          if (entity is Directory) {
+            folders.add(p);
+          } else if (entity is File) {
+            final stat = await entity.stat();
+            files.add(
+              BrowserItem(
+                id: p,
+                name: base,
+                path: p,
+                sizeBytes: stat.size,
+                modified: stat.modified,
+                mimeType: _mimeFromPath(p),
+                isImage: _isImage(p),
+                isVideo: _isVideo(p),
+                isAudio: _isAudio(p),
+                isFromGallery: false,
+              ),
+            );
+          }
+        } catch (_) {}
+      }
+    } catch (_) {
+      return DirectoryLevelListing(folderPaths: folders, files: files);
+    }
+
+    folders.sort(
+      (a, b) =>
+          _basename(a).toLowerCase().compareTo(_basename(b).toLowerCase()),
+    );
+    files.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
+
+    return DirectoryLevelListing(folderPaths: folders, files: files);
   }
 
   Future<List<BrowserItem>> _scanMultipleDirsAsItems(

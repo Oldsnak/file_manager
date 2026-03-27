@@ -86,8 +86,26 @@ class _ScanFolderBrowserPageState extends State<ScanFolderBrowserPage> {
               IconButton(icon: Icon(Icons.sort, color: iconColor), onPressed: () => showSortSheet(context)),
               const ViewToggle(),
             ] else ...[
-              IconButton(icon: Icon(Icons.select_all, color: iconColor), onPressed: c.selectAll),
-              IconButton(icon: const Icon(Icons.delete_outline, color: TColors.error), onPressed: c.deleteSelected),
+              IconButton(icon: Icon(Icons.select_all, color: iconColor), onPressed: c.selectAll, tooltip: "Select All"),
+              IconButton(
+                icon: Icon(Icons.enhanced_encryption, color: TColors.primary),
+                tooltip: "Move to Secure Folder",
+                onPressed: () async {
+                  if (c.selectedIds.isEmpty) return;
+                  final n = await c.moveSelectedToSecureVault();
+                  if (!context.mounted) return;
+                  if (n > 0) {
+                    THelperFunctions.showSnackBar(
+                      n == 1
+                          ? "1 item moved to Secure Folder"
+                          : "$n items moved to Secure Folder",
+                    );
+                  } else {
+                    THelperFunctions.showSnackBar("No items moved to Secure Folder");
+                  }
+                },
+              ),
+              IconButton(icon: const Icon(Icons.delete_outline, color: TColors.error), onPressed: c.deleteSelected, tooltip: "Delete Selected"),
             ],
           ],
         ),

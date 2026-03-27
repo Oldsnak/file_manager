@@ -1,12 +1,12 @@
-import 'package:file_manager/foundation/helpers/helper_functions.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_instance/src/extension_instance.dart';
+import 'package:get/get.dart';
+
 import '../../../common/widgets/custom_shapes/containers/primary_header_container.dart';
 import '../../../common/widgets/texts/section_heading.dart';
 import '../../../core/controllers/dashboard_controller.dart';
 import '../../../foundation/constants/colors.dart';
 import '../../../foundation/constants/sizes.dart';
+import '../../file_browser/pages/internal_storage_tree_page.dart';
 import '../components/dashboard_categories.dart';
 import '../components/product_card_vertical.dart';
 
@@ -16,7 +16,6 @@ class Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dash = Get.find<DashboardController>();
-    final bool dark = THelperFunctions.isDarkMode(context);
 
     return Scaffold(
 
@@ -73,7 +72,29 @@ class Dashboard extends StatelessWidget {
                     ),
 
                     SizedBox(height: TSizes.spaceBtwItems,),
-                    Center(child: ElevatedButton(onPressed: (){}, child: Text("Internal Storage", style: TextStyle(color: TColors.darkContainer),),)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: TSizes.lg),
+                      child: Center(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                          ),
+                          onPressed: () {
+                            Get.to(
+                              () => const InternalStorageTreePage(
+                                directoryPath:
+                                    InternalStorageTreePage.androidDefaultRoot,
+                                title: 'Internal Storage',
+                              ),
+                            );
+                          },
+                          child: Text(
+                            'Internal Storage',
+                            style: TextStyle(color: TColors.darkContainer),
+                          ),
+                        ),
+                      ),
+                    ),
                     SizedBox(height: TSizes.spaceBtwItems,),
                     // HealthScoreMeter(score: 72),
                   ],

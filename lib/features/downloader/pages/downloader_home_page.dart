@@ -1,10 +1,11 @@
 import 'package:file_manager/features/downloader/components/social_apps.dart';
+import 'package:file_manager/features/downloader/widgets/downloader_top_notification.dart';
 import 'package:file_manager/foundation/constants/api_config.dart';
 import 'package:file_manager/foundation/constants/assets.dart';
 import 'package:file_manager/foundation/helpers/helper_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../../common/widgets/custom_shapes/containers/primary_header_container.dart';
 import '../../../common/widgets/texts/section_heading.dart';
 import '../../../foundation/constants/colors.dart';
@@ -22,8 +23,29 @@ class DownloaderHomePage extends StatefulWidget {
   State<DownloaderHomePage> createState() => _DownloaderHomePageState();
 }
 
-class _DownloaderHomePageState extends State<DownloaderHomePage> {
+class _DownloaderHomePageState extends State<DownloaderHomePage> with WidgetsBindingObserver {
   int _providerKey = 0;
+  DownloaderController? _activeController;
+  int _bootstrappedForProviderKey = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _activeController?.onAppResumed();
+    }
+  }
 
   void _showBackendUrlDialog() {
     final controller = TextEditingController(text: ApiConfig.effectiveBaseUrl);
@@ -63,8 +85,6 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool dark = THelperFunctions.isDarkMode(context);
-
     return ChangeNotifierProvider(
       key: ValueKey(_providerKey),
       create: (_) => DownloaderController(
@@ -77,36 +97,32 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
       child: Builder(
         builder: (context) {
           final c = context.watch<DownloaderController>();
+          _activeController = c;
+          if (_bootstrappedForProviderKey != _providerKey) {
+            _bootstrappedForProviderKey = _providerKey;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              c.bootstrap();
+            });
+          }
 
-          // Show errors and save result as snackbar
+          // GetX snackbar (top, floating) — one message per frame max.
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!context.mounted) return;
             final err = c.error;
             if (err != null && err.trim().isNotEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(err),
-                  backgroundColor: Colors.red.shade700,
-                ),
-              );
+              showDownloaderGetSnackbar(kind: DownloaderNoticeKind.error, detail: err);
+              c.clearError();
+              return;
             }
             final saveErr = c.lastSaveError;
             if (saveErr != null && saveErr.trim().isNotEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(saveErr),
-                  backgroundColor: Colors.orange.shade700,
-                ),
-              );
+              showDownloaderGetSnackbar(kind: DownloaderNoticeKind.warning, detail: saveErr);
               c.clearLastSaveResult();
+              return;
             }
             final savedPath = c.lastSavedFilePath;
             if (savedPath != null && savedPath.trim().isNotEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Saved to $savedPath'),
-                  backgroundColor: Colors.green.shade700,
-                ),
-              );
+              showDownloaderGetSnackbar(kind: DownloaderNoticeKind.success, detail: savedPath);
               c.clearLastSaveResult();
             }
           });
@@ -147,27 +163,20 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Center(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  "Download your videos here!",
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium!
-                                      .apply(color: TColors.primary),
-                                ),
+                          child: Flexible(
+                            child: GestureDetector(
+                              onTap: () {
+                                context.findAncestorStateOfType<_DownloaderHomePageState>()
+                                    ?._showBackendUrlDialog();
+                              },
+                              child: Text(
+                                "Download your videos here!",
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium!
+                                    .apply(color: TColors.primary),
                               ),
-                              IconButton(
-                                onPressed: () {
-                                  context.findAncestorStateOfType<_DownloaderHomePageState>()
-                                      ?._showBackendUrlDialog();
-                                },
-                                icon: Icon(Icons.link, color: TColors.primary),
-                                tooltip: 'Set backend URL (for real device)',
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                         if (ApiConfig.effectiveBaseUrl.contains('10.0.2.2'))
@@ -312,24 +321,53 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
 
                         const SizedBox(height: TSizes.spaceBtwSections),
 
-                        // Single-video downloader card: only after backend returns info
-                        if (!c.isPlaylistMode && c.videoInfo != null)
-                          _DownloaderCard(
-                            title: c.videoInfo!.title ?? "Untitled video",
-                            thumbnailUrl: c.videoInfo!.thumbnail,
-                            fallbackAsset: thumbnail,
-                            selectedQuality: c.selectedQuality,
-                            onPickQuality: c.videoInfo!.formats.isNotEmpty
-                                ? () => _showQualityPicker(context, c)
-                                : null,
-                            isLoading: c.isChecking || c.isFetchingInfo,
-                            isDownloading: c.isDownloading,
-                            progressValue: c.progressValue,
-                            canStartDownload: c.canStartDownload && !c.isStarting && !c.isDownloading,
-                            onDownload: c.canStartDownload && !c.isStarting && !c.isDownloading
-                                ? () => c.startDownload()
-                                : null,
-                          ),
+                        // Single-video downloader card: animates out when download starts
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 520),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) {
+                            final curved = CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeInOutCubic,
+                            );
+                            return FadeTransition(
+                              opacity: curved,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: Offset.zero,
+                                  end: const Offset(0, -0.12),
+                                ).animate(curved),
+                                child: ScaleTransition(
+                                  scale: Tween<double>(begin: 1, end: 0.92).animate(curved),
+                                  child: child,
+                                ),
+                              ),
+                            );
+                          },
+                          child: c.shouldShowSingleVideoCard
+                              ? KeyedSubtree(
+                                  key: ValueKey(c.videoInfo!.sourceUrl),
+                                  child: _DownloaderCard(
+                                    title: c.videoInfo!.title ?? "Untitled video",
+                                    thumbnailUrl: c.videoInfo!.thumbnail,
+                                    fallbackAsset: thumbnail,
+                                    selectedQuality: c.selectedQuality,
+                                    onPickQuality: c.videoInfo!.formats.isNotEmpty
+                                        ? () => _showQualityPicker(context, c)
+                                        : null,
+                                    isLoading: c.isChecking || c.isFetchingInfo,
+                                    isDownloading: c.isDownloading,
+                                    progressValue: c.progressValue,
+                                    canStartDownload:
+                                        c.canStartDownload && !c.isStarting && !c.isDownloading,
+                                    onDownload: c.canStartDownload && !c.isStarting && !c.isDownloading
+                                        ? () => c.startDownload()
+                                        : null,
+                                  ),
+                                )
+                              : const SizedBox.shrink(key: ValueKey('no-single-card')),
+                        ),
 
                         // Playlist UI
                         if (c.isPlaylistMode && c.hasPlaylist) ...[
@@ -439,32 +477,168 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
 
   static void _showQualityPicker(BuildContext context, DownloaderController c) {
     final formats = c.videoInfo?.formats ?? const <VideoQualityModel>[];
+    final dark = THelperFunctions.isDarkMode(context);
+    final bgColor = dark ? TColors.darkContainer : TColors.lightContainer;
+    final textColor = dark ? TColors.textWhite : TColors.textPrimary;
+    final subTextColor = dark ? TColors.darkGrey : TColors.textSecondary;
+    final dividerColor = dark ? TColors.darkGrey : TColors.grey;
+    final cardBg = dark ? TColors.darkPrimaryContainer : TColors.lightPrimaryContainer;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      isScrollControlled: false,
+      backgroundColor: Colors.transparent,
       builder: (_) {
-        return SafeArea(
-          child: ListView.separated(
-            itemCount: formats.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final f = formats[i];
-              final selected = c.selectedQuality?.formatId == f.formatId;
-
-              return ListTile(
-                title: Text(
-                  f.quality.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+        return Padding(
+          padding: const EdgeInsets.only(
+            left: TSizes.sm,
+            right: TSizes.sm,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(TSizes.cardRdiusMd),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(dark ? 0.4 : 0.12),
+                  blurRadius: 18,
+                  offset: const Offset(0, -4),
                 ),
-                subtitle: Text(f.filesizeHuman ?? ""),
-                trailing: selected ? const Icon(Icons.check_circle) : null,
-                onTap: () {
-                  c.selectQuality(f);
-                  Navigator.pop(context);
-                },
-              );
-            },
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                TSizes.defaultSpace,
+                TSizes.md,
+                TSizes.defaultSpace,
+                0,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: TSizes.md),
+                    child: Text(
+                      'Select quality',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: formats.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: TSizes.md),
+                      itemBuilder: (_, i) {
+                        final f = formats[i];
+                        final selected =
+                            c.selectedQuality?.formatId == f.formatId;
+                        final radius =
+                            BorderRadius.circular(TSizes.cardRdiusMd);
+
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              c.selectQuality(f);
+                              Navigator.pop(context);
+                            },
+                            borderRadius: radius,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: TSizes.md,
+                                vertical: TSizes.md,
+                              ),
+                              decoration: BoxDecoration(
+                                color: cardBg,
+                                borderRadius: radius,
+                                border: Border.all(
+                                  color: selected
+                                      ? TColors.primary
+                                      : dividerColor.withOpacity(0.5),
+                                  width: selected ? 2 : 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(
+                                        dark ? 0.5 : 0.10),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    height: 18,
+                                    width: 18,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: selected
+                                          ? TColors.primary
+                                          : Colors.transparent,
+                                      border: Border.all(
+                                        color: selected
+                                            ? TColors.primary
+                                            : dividerColor.withOpacity(0.7),
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: selected
+                                        ? const Icon(
+                                            Icons.check,
+                                            size: 12,
+                                            color: Colors.white,
+                                          )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: TSizes.sm),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          f.quality.toUpperCase(),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: TSizes.fontSizeMd,
+                                            color: textColor,
+                                          ),
+                                        ),
+                                        if (f.filesizeHuman != null &&
+                                            f.filesizeHuman!.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            f.filesizeHuman!,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                    color: subTextColor),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -477,32 +651,169 @@ class _DownloaderHomePageState extends State<DownloaderHomePage> {
       PlaylistItemVM item,
       ) {
     final formats = item.qualities;
+    final dark = THelperFunctions.isDarkMode(context);
+    final bgColor = dark ? TColors.darkContainer : TColors.lightContainer;
+    final textColor = dark ? TColors.textWhite : TColors.textPrimary;
+    final subTextColor = dark ? TColors.darkGrey : TColors.textSecondary;
+    final dividerColor = dark ? TColors.darkGrey : TColors.grey;
+    final cardBg = dark ? TColors.darkPrimaryContainer : TColors.lightPrimaryContainer;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      isScrollControlled: false,
+      backgroundColor: Colors.transparent,
       builder: (_) {
-        return SafeArea(
-          child: ListView.separated(
-            itemCount: formats.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final f = formats[i];
-              final selected = item.selectedQuality?.formatId == f.formatId;
-
-              return ListTile(
-                title: Text(
-                  f.quality.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+        return Padding(
+          padding: const EdgeInsets.only(
+            left: TSizes.sm,
+            right: TSizes.sm,
+            // bottom: TSizes.sm,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(TSizes.cardRdiusMd),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(dark ? 0.4 : 0.12),
+                  blurRadius: 18,
+                  offset: const Offset(0, -4),
                 ),
-                subtitle: Text(f.filesizeHuman ?? ""),
-                trailing: selected ? const Icon(Icons.check_circle) : null,
-                onTap: () {
-                  c.selectQualityForItem(item.id, f);
-                  Navigator.pop(context);
-                },
-              );
-            },
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                TSizes.defaultSpace,
+                TSizes.md,
+                TSizes.defaultSpace,
+                0,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: TSizes.md),
+                    child: Text(
+                      'Select quality',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: formats.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: TSizes.md),
+                      itemBuilder: (_, i) {
+                        final f = formats[i];
+                        final selected =
+                            item.selectedQuality?.formatId == f.formatId;
+                        final radius =
+                            BorderRadius.circular(TSizes.cardRdiusMd);
+
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              c.selectQualityForItem(item.id, f);
+                              Navigator.pop(context);
+                            },
+                            borderRadius: radius,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: TSizes.md,
+                                vertical: TSizes.md,
+                              ),
+                              decoration: BoxDecoration(
+                                color: cardBg,
+                                borderRadius: radius,
+                                border: Border.all(
+                                  color: selected
+                                      ? TColors.primary
+                                      : dividerColor.withOpacity(0.5),
+                                  width: selected ? 2 : 1,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(
+                                        dark ? 0.5 : 0.10),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    height: 18,
+                                    width: 18,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: selected
+                                          ? TColors.primary
+                                          : Colors.transparent,
+                                      border: Border.all(
+                                        color: selected
+                                            ? TColors.primary
+                                            : dividerColor.withOpacity(0.7),
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: selected
+                                        ? const Icon(
+                                            Icons.check,
+                                            size: 12,
+                                            color: Colors.white,
+                                          )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: TSizes.sm),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          f.quality.toUpperCase(),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: TSizes.fontSizeMd,
+                                            color: textColor,
+                                          ),
+                                        ),
+                                        if (f.filesizeHuman != null &&
+                                            f.filesizeHuman!.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            f.filesizeHuman!,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                    color: subTextColor),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -815,7 +1126,7 @@ class _DownloaderCard extends StatelessWidget {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-                    : const Icon(Icons.download),
+                    : const Icon(Iconsax.arrow_down_1),
                 label: const Text('Download'),
               ),
             ),

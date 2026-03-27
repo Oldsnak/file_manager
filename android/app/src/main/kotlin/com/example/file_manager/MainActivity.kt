@@ -2,9 +2,13 @@
 package com.example.file_manager
 
 import android.app.ActivityManager
-import android.content.Context
 import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -43,6 +47,20 @@ class MainActivity : AudioServiceFragmentActivity() {
                         result.success(ok)
                     }
 
+                    "killBackgroundApps" -> {
+                        // Heavy work off the UI thread; cannot force-stop foreground apps (OS policy).
+                        Thread {
+                            val count = killOtherAppsBackgroundProcesses()
+                            Handler(Looper.getMainLooper()).post {
+                                result.success(
+                                    hashMapOf(
+                                        "count" to count
+                                    )
+                                )
+                            }
+                        }.start()
+                    }
+
                     else -> result.notImplemented()
                 }
             }
@@ -71,5 +89,39 @@ class MainActivity : AudioServiceFragmentActivity() {
             Runtime.getRuntime().gc()
             System.gc()
         } catch (_: Exception) { }
+    }
+
+    /**
+     * Asks the system to kill background processes for other packages.
+     * Does not and cannot close other apps that are on-screen (foreground) — Android forbids that for third-party apps.
+     */
+    private fun killOtherAppsBackgroundProcesses(): Int {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val pm = applicationContext.packageManager
+        val myPkg = applicationContext.packageName
+
+        @Suppress("DEPRECATION")
+        val flags = PackageManager.GET_META_DATA
+        val apps = try {
+            pm.getInstalledApplications(flags)
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        var attempted = 0
+        for (app in apps) {
+            val pkg = app.packageName ?: continue
+            if (pkg == myPkg) continue
+
+            // Only third-party / non-system installs; avoids meddling with core system packages.
+            val isSystem = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+            if (isSystem) continue
+
+            try {
+                am.killBackgroundProcesses(pkg)
+                attempted++
+            } catch (_: Exception) { }
+        }
+        return attempted
     }
 }

@@ -205,10 +205,35 @@ class DownloaderService {
 
   static String? _parseContentDispositionFilename(String? value) {
     if (value == null || value.isEmpty) return null;
-    // Matches: filename="video.mp4" or filename='video.mp4'
-    final match = RegExp('filename\\s*=\\s*["\']?([^"\';]+)["\']?').firstMatch(value);
-    final name = match?.group(1)?.trim();
-    if (name != null && name.isNotEmpty) return name;
+    // RFC 5987: filename*=UTF-8''percent-encoded (prefer for long / Unicode names)
+    final star = RegExp(
+      r"filename\*\s*=\s*[\w.\-]+''([^;\s]+)",
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (star != null) {
+      try {
+        final encoded = star.group(1)!;
+        final decoded = Uri.decodeComponent(encoded);
+        if (decoded.isNotEmpty) return decoded;
+      } catch (_) {}
+    }
+    // Quoted: filename="video.mp4"
+    final dq = RegExp(r'filename\s*=\s*"([^"]*)"', caseSensitive: false).firstMatch(value);
+    if (dq != null) {
+      final name = dq.group(1)?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    }
+    // Unquoted fallback
+    final sq = RegExp(r"filename\s*=\s*'([^']*)'", caseSensitive: false).firstMatch(value);
+    if (sq != null) {
+      final name = sq.group(1)?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    }
+    final loose = RegExp(r'filename\s*=\s*([^;\s]+)', caseSensitive: false).firstMatch(value);
+    final raw = loose?.group(1)?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      return raw.replaceAll('"', '').replaceAll("'", '');
+    }
     return null;
   }
 
